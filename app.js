@@ -28,6 +28,27 @@ let currentMode = "Vehicle";
 // 1. FAIL-SAFE HELPERS
 // ==========================================
 
+// Helper to format time in 12-hour format for display
+function formatTime12hr(time24) {
+    if (!time24) return '';
+    try {
+        const [hours, minutes] = time24.split(':');
+        const d = new Date();
+        d.setHours(parseInt(hours));
+        d.setMinutes(parseInt(minutes));
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch (e) { return time24; }
+}
+
+// Helper to convert 12-hour time input to 24-hour for storage
+function time12to24(time12) {
+    if (!time12) return '';
+    try {
+        const d = new Date('2000-01-01T' + time12);
+        return d.toTimeString().split(' ')[0];
+    } catch (e) { return time12; }
+}
+
 function getTime() { 
     return new Date().toTimeString().split(' ')[0]; 
 }
@@ -90,6 +111,56 @@ async function renderEfficiencyChart(logs) {
     } catch(e) { console.warn("Chart Engine: Syncing data..."); }
 }
 
+let dayChart = null;
+
+async function loadDayChart() {
+    try {
+        const res = await fetch(`${API_URL}/day-stats`);
+        const { labels, data } = await res.json();
+        
+        if (!data || data.every(v => v === 0)) {
+            document.getElementById('dayChart').style.display = 'none';
+            return;
+        }
+        
+        document.getElementById('dayChart').style.display = 'block';
+        
+        const ctx = document.getElementById('dayChart').getContext('2d');
+        
+        if (dayChart) dayChart.destroy();
+        
+        dayChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.7)',   // Sun - red
+                        'rgba(59, 130, 246, 0.7)',   // Mon - blue
+                        'rgba(59, 130, 246, 0.7)',  // Tue - blue
+                        'rgba(59, 130, 246, 0.7)',  // Wed - blue
+                        'rgba(59, 130, 246, 0.7)',  // Thu - blue
+                        'rgba(59, 130, 246, 0.7)',  // Fri - blue
+                        'rgba(16, 185, 129, 0.7)'    // Sat - green
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', stepSize: 1 } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+    } catch (e) {
+        console.error("Failed to load day stats:", e);
+    }
+}
+
 async function runBenchmark() {
     try {
         const res = await fetch(`${API_URL}/benchmark`);
@@ -97,11 +168,19 @@ async function runBenchmark() {
         const tbody = document.querySelector('#benchmarkTable tbody');
         if(!tbody) return;
 
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;">No data available</td></tr>';
+            return;
+        }
+
         tbody.innerHTML = data.map(row => {
             const accVal = parseInt(row.prediction_accuracy);
-            const color = accVal > 80 ? '#10b981' : (accVal > 50 ? '#f59e0b' : '#ef4444');
+            const color = accVal >= 80 ? '#10b981' : (accVal >= 60 ? '#f59e0b' : '#ef4444');
+            const modeInfo = MODE_MAP[row.mode] || MODE_MAP['Default'];
             return `<tr>
                 <td style="font-weight:700;">${row.route}</td>
+                <td><span class="step-mode">${row.mode || 'Vehicle'}</span></td>
+                <td class="text-muted">${row.avg_min}m</td>
                 <td class="text-muted">±${row.volatility_min}m</td>
                 <td style="color:${color}; font-weight:800;">${row.prediction_accuracy}</td>
             </tr>`;
@@ -130,12 +209,13 @@ async function loadLogs() {
             const travel = timeDiff(l.timestamp_departed, l.timestamp_arrived_dropoff);
             const routeName = l.routes ? l.routes.name : 'Unknown';
             const dateStr = l.date.split('-')[1] + "/" + l.date.split('-')[2];
+            const dropped = l.timestamp_arrived_dropoff ? formatTime12hr(l.timestamp_arrived_dropoff) : '--';
 
             return `<tr>
                 <td>${dateStr}</td>
                 <td style="font-weight:600;">${routeName}</td>
                 <td>${wait}m</td>
-                <td>${travel}m</td>
+                <td>${travel}m <span style="opacity:0.5;font-size:0.75rem">${dropped}</span></td>
             </tr>`;
         }).join('');
 
@@ -169,6 +249,8 @@ async function loadRoutes() {
                 document.getElementById('routeDetails').innerText = `${opt.dataset.origin} ➔ ${opt.dataset.dest}`;
                 setLoggerMode(opt.dataset.mode);
             }
+            // Update manual logger inputs when route changes
+            updateManualLoggerInputs();
         };
 
         addRouteToChain(); 
@@ -202,10 +284,12 @@ actionBtns.forEach((id, index) => {
     if(btn) {
         btn.onclick = function() {
             const key = id.replace('btn', '').toLowerCase();
-            tripData.timestamps[key] = getTime();
+            const time24 = getTime();
+            tripData.timestamps[key] = time24;
+            const time12 = formatTime12hr(time24);
             this.className = "btn btn-success";
             this.disabled = true;
-            this.innerHTML += ' <i class="fas fa-check"></i>';
+            this.innerHTML = this.innerHTML.replace(/<i class="fas fa-stopwatch"><\/i>|<i class="fas fa-ticket-alt"><\/i>|<i class="fas fa-bus"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
             if(index < actionBtns.length - 1) {
                 const next = document.getElementById(actionBtns[index+1]);
                 next.disabled = false;
@@ -220,8 +304,10 @@ actionBtns.forEach((id, index) => {
 document.getElementById('btnStartWalk').onclick = function() {
     const now = getTime();
     tripData.timestamps = { arrived: now, boarded: now, departed: now };
+    const time12 = formatTime12hr(now);
     this.className = "btn btn-success";
     this.disabled = true;
+    this.innerHTML = `<i class="fas fa-walking"></i> <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
     enableEndingStage();
 };
 
@@ -232,18 +318,47 @@ function enableEndingStage() {
 }
 
 document.getElementById('btnDropped').onclick = function() {
-    tripData.timestamps['dropped'] = getTime();
+    const time24 = getTime();
+    tripData.timestamps['dropped'] = time24;
+    const time12 = formatTime12hr(time24);
     this.className = "btn btn-success";
     this.disabled = true;
-    document.getElementById('btnNext').disabled = false;
-    document.getElementById('btnNext').className = "btn btn-primary";
+    this.innerHTML = this.innerHTML.replace(/<i class="fas fa-flag-checkered"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
     document.getElementById('saveSection').classList.remove('hidden');
 };
 
-document.getElementById('btnNext').onclick = function() {
-    tripData.timestamps['nextStop'] = getTime();
-    this.className = "btn btn-success";
-    this.disabled = true;
+document.getElementById('btnSaveLog').onclick = async function() {
+    const routeId = document.getElementById('logRouteSelect').value;
+    if (!routeId) return alert("Please select a route first.");
+    
+    const date = new Date().toISOString().split('T')[0];
+    const body = {
+        route_id: routeId,
+        date: date,
+        timestamps: tripData.timestamps,
+        missed_cycles: missedCycles
+    };
+
+    try {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        
+        const res = await fetch(`${API_URL}/log`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        
+        if (!res.ok) throw new Error('Save failed');
+        
+        alert("Trip saved successfully!");
+        location.reload();
+    } catch(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save Trip Data';
+        alert("Save failed: " + e.message);
+    }
 };
 
 // ==========================================
@@ -253,8 +368,11 @@ document.getElementById('btnNext').onclick = function() {
 function addRouteToChain() {
     const container = document.getElementById('routeChainContainer');
     const div = document.createElement('div');
-    // Ensure the data-mode is passed to the prediction selects
-    const options = availableRoutes.map(r => `<option value="${r.id}" data-mode="${r.mode}">${r.name}</option>`).join('');
+    // Include mode, origin, and destination in the options
+    const options = availableRoutes.map(r => {
+        const label = r.origin && r.destination ? `${r.name} (${r.origin} → ${r.destination})` : r.name;
+        return `<option value="${r.id}" data-mode="${r.mode}" data-origin="${r.origin || ''}" data-dest="${r.destination || ''}">${label}</option>`;
+    }).join('');
     div.innerHTML = `<select class="route-select" style="margin-bottom:10px">
         <option value="">-- Select Stop --</option>
         ${options}
@@ -262,33 +380,141 @@ function addRouteToChain() {
     container.appendChild(div);
 }
 
+// ==========================================
+// PRESET FUNCTIONS
+// ==========================================
+
+async function loadPresets() {
+    try {
+        const res = await fetch(`${API_URL}/presets`);
+        const presets = await res.json();
+        const select = document.getElementById('presetSelect');
+        
+        select.innerHTML = '<option value="">-- Select Preset --</option>';
+        presets.forEach(p => {
+            select.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+        });
+        
+        return presets;
+    } catch (e) {
+        console.error("Failed to load presets:", e);
+        return [];
+    }
+}
+
+window.loadPreset = async function() {
+    const select = document.getElementById('presetSelect');
+    const presetId = select.value;
+    if (!presetId) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/presets`);
+        const presets = await res.json();
+        const preset = presets.find(p => p.id === presetId);
+        
+        if (!preset || !preset.route_ids) return;
+        
+        // Clear existing chain
+        document.getElementById('routeChainContainer').innerHTML = '';
+        
+        // Add routes from preset
+        preset.route_ids.forEach(routeId => {
+            addRouteToChain();
+            const selects = document.querySelectorAll('.route-select');
+            const lastSelect = selects[selects.length - 1];
+            if (lastSelect) {
+                lastSelect.value = routeId;
+            }
+        });
+    } catch (e) {
+        console.error("Failed to load preset:", e);
+    }
+};
+
+window.savePreset = async function() {
+    const selects = Array.from(document.querySelectorAll('.route-select'));
+    const routeIds = selects.map(s => s.value).filter(v => v);
+    
+    if (routeIds.length === 0) return alert("Add at least one route to save.");
+    
+    const name = prompt("Enter a name for this route:");
+    if (!name) return;
+    
+    try {
+        await fetch(`${API_URL}/presets`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, route_ids: routeIds })
+        });
+        
+        alert("Preset saved!");
+        loadPresets();
+    } catch (e) {
+        alert("Failed to save preset.");
+    }
+};
+
+window.deletePreset = async function() {
+    const select = document.getElementById('presetSelect');
+    const presetId = select.value;
+    if (!presetId) return alert("Select a preset to delete.");
+    
+    if (!confirm("Delete this preset?")) return;
+    
+    try {
+        await fetch(`${API_URL}/presets/${presetId}`, { method: 'DELETE' });
+        alert("Preset deleted!");
+        loadPresets();
+    } catch (e) {
+        alert("Failed to delete preset.");
+    }
+};
+
 async function calculatePrediction() {
     const start = document.getElementById('predictStartTime').value;
+    const date = document.getElementById('predictDate').value;
     const selects = Array.from(document.querySelectorAll('.route-select'));
     const ids = selects.map(s => s.value).filter(v => v);
     
     if(ids.length === 0) return alert("Select at least one stop.");
+    if(!start) return alert("Please select a departure time.");
 
     try {
+        // Show loading state
+        const predictBtn = document.querySelector('#view-predict .btn-primary');
+        const originalText = predictBtn.innerHTML;
+        predictBtn.disabled = true;
+        predictBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculating...';
+        
         const res = await fetch(`${API_URL}/predict`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ start_time: start, route_ids: ids })
+            body: JSON.stringify({ start_time: start, date: date, route_ids: ids })
         });
         const data = await res.json();
         
+        // Restore button
+        predictBtn.disabled = false;
+        predictBtn.innerHTML = originalText;
+        
         document.getElementById('predictionResult').classList.remove('hidden');
-        document.getElementById('timeBest').innerText = data.arrivals.best;
-        document.getElementById('timeSafe').innerText = data.arrivals.safe;
-        document.getElementById('timeWorst').innerText = data.arrivals.worst;
+        // Convert times from 24hr to 12hr format
+        document.getElementById('timeBest').innerText = formatTime12hr(data.arrivals.best) || data.arrivals.best;
+        document.getElementById('timeSafe').innerText = formatTime12hr(data.arrivals.safe) || data.arrivals.safe;
+        document.getElementById('timeWorst').innerText = formatTime12hr(data.arrivals.worst) || data.arrivals.worst;
 
         const detailsContainer = document.getElementById('predDetails');
         
         detailsContainer.innerHTML = data.breakdown.map((leg, i) => {
             const selectedOpt = selects[i].options[selects[i].selectedIndex];
-            const name = selectedOpt.text;
-            const mode = selectedOpt.dataset.mode || 'Default';
+            // Use name from server response, fallback to dropdown text
+            const name = leg.name || selectedOpt.text;
+            const origin = leg.origin || selectedOpt.dataset.origin || '';
+            const destination = leg.destination || selectedOpt.dataset.dest || '';
+            // Use mode from server response, fallback to dataset mode
+            const mode = leg.mode || selectedOpt.dataset.mode || 'Default';
             const modeInfo = MODE_MAP[mode] || MODE_MAP['Default'];
+            const isWalking = mode === 'Walking' || mode === 'Bicycle';
             
             const delay = (leg.timelines.worst.wait + leg.timelines.worst.travel) - (leg.timelines.safe.wait + leg.timelines.safe.travel);
             
@@ -299,21 +525,29 @@ async function calculatePrediction() {
                 </div>
                 <div class="step-header">
                     <span class="step-title">${name}</span>
+                    <span class="step-mode">${mode}</span>
                 </div>
+                ${origin && destination ? `<div class="step-route">${origin} ➔ ${destination}</div>` : ''}
                 <div class="step-meta">
                     <div class="meta-box">
-                        <span class="meta-label">Waiting</span>
+                        <span class="meta-label">${isWalking ? 'Duration' : 'Waiting'}</span>
                         <span>${leg.timelines.safe.wait}m</span>
                     </div>
                     <div class="meta-box">
-                        <span class="meta-label">Transit</span>
+                        <span class="meta-label">${isWalking ? 'Total' : 'Transit'}</span>
                         <span>${leg.timelines.safe.travel}m</span>
                     </div>
                 </div>
                 ${delay > 0 ? `<div class="risk-alert"><i class="fas fa-exclamation-triangle"></i> Variance Risk: +${delay}m</div>` : ''}
             </div>`;
         }).join('');
-    } catch(e) { alert("Prediction error."); }
+    } catch(e) { 
+        // Restore button on error
+        const predictBtn = document.querySelector('#view-predict .btn-primary');
+        predictBtn.disabled = false;
+        predictBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Predict Arrival';
+        alert("Prediction error."); 
+    }
 }
 
 async function saveManualLog() {
@@ -323,26 +557,72 @@ async function saveManualLog() {
     
     if(!routeId || !date) return alert("Route and Date required.");
 
-    const body = {
-        route_id: routeId,
-        date: date,
-        timestamps: {
+    // Get selected route mode
+    const routeSelect = document.getElementById('logRouteSelect');
+    const selectedOption = routeSelect.options[routeSelect.selectedIndex];
+    const mode = selectedOption?.dataset?.mode;
+    
+    let timestamps;
+    
+    if (mode === 'Walking' || mode === 'Bicycle') {
+        // Walking mode - only need start and end times
+        const started = document.getElementById('manualStarted').value;
+        const ended = document.getElementById('manualEnded').value;
+        
+        if (!started || !ended) return alert("Please enter start and end times.");
+        
+        timestamps = {
+            arrived: started,
+            boarded: started,
+            departed: started,
+            dropped: ended
+        };
+    } else {
+        // Vehicle mode - need all timestamps
+        timestamps = {
             arrived: document.getElementById('manualArrived').value,
             boarded: document.getElementById('manualBoarded').value,
             departed: document.getElementById('manualDeparted').value,
             dropped: document.getElementById('manualDropped').value
-        },
+        };
+    }
+
+    const body = {
+        route_id: routeId,
+        date: date,
+        timestamps: timestamps,
         missed_cycles: parseInt(missed)
     };
 
     try {
-        await fetch(`${API_URL}/log`, {
+        // Show loading state
+        const confirmBtn = document.querySelector('#manualLoggerUI .btn-success');
+        const originalText = confirmBtn.innerHTML;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        
+        const res = await fetch(`${API_URL}/log`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body)
         });
-        location.reload();
-    } catch(e) { alert("Save failed."); }
+        
+        if (!res.ok) throw new Error('Save failed');
+        
+        // Show success feedback
+        confirmBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+        confirmBtn.style.background = 'var(--accent)';
+        
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+    } catch(e) {
+        // Show error feedback
+        const confirmBtn = document.querySelector('#manualLoggerUI .btn-success');
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = originalText;
+        alert("Save failed: " + e.message);
+    }
 }
 
 // ==========================================
@@ -354,7 +634,8 @@ function switchTab(viewId, btn) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.getElementById(viewId).classList.add('active');
     btn.classList.add('active');
-    if (viewId === 'view-manage') { loadLogs(); runBenchmark(); }
+    if (viewId === 'view-manage') { loadLogs(); runBenchmark(); loadDayChart(); }
+    if (viewId === 'view-analytics') { loadAnalytics(); }
 }
 
 window.switchTab = switchTab;
@@ -366,16 +647,164 @@ window.addRouteToChain = addRouteToChain;
 window.toggleManualMode = () => {
     document.getElementById('liveLoggerUI').classList.toggle('hidden');
     document.getElementById('manualLoggerUI').classList.toggle('hidden');
+    
+    updateManualLoggerInputs();
 };
+
+// Function to update manual logger inputs based on selected route mode
+function updateManualLoggerInputs() {
+    const routeSelect = document.getElementById('logRouteSelect');
+    const selectedOption = routeSelect.options[routeSelect.selectedIndex];
+    const mode = selectedOption?.dataset?.mode;
+    
+    if (mode === 'Walking' || mode === 'Bicycle') {
+        document.getElementById('manualVehicleInputs').classList.add('hidden');
+        document.getElementById('manualWalkingInputs').classList.remove('hidden');
+    } else {
+        document.getElementById('manualVehicleInputs').classList.remove('hidden');
+        document.getElementById('manualWalkingInputs').classList.add('hidden');
+    }
+}
 window.toggleCustomMode = (select) => {
     const input = document.getElementById('customModeInput');
     select.value === 'Custom' ? input.classList.remove('hidden') : input.classList.add('hidden');
 };
 
+window.createNewRoute = async function() {
+    const name = document.getElementById('newRouteName').value;
+    const origin = document.getElementById('newOrigin').value;
+    const destination = document.getElementById('newDest').value;
+    let mode = document.getElementById('newRouteMode').value;
+    
+    // Handle custom mode
+    if (mode === 'Custom') {
+        mode = document.getElementById('customModeInput').value;
+        if (!mode) return alert("Please enter a custom mode name.");
+    }
+    
+    if (!name || !origin || !destination) return alert("Please fill in all fields.");
+    
+    const body = { name, origin, destination, mode };
+    
+    try {
+        const res = await fetch(`${API_URL}/routes`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        
+        if (!res.ok) throw new Error('Failed to create route');
+        
+        alert("Route created successfully!");
+        loadRoutes();
+        
+        // Clear form
+        document.getElementById('newRouteName').value = '';
+        document.getElementById('newOrigin').value = '';
+        document.getElementById('newDest').value = '';
+    } catch(e) {
+        alert("Failed to create route: " + e.message);
+    }
+};
+
+async function loadAnalytics() {
+    try {
+        const res = await fetch(`${API_URL}/analytics`);
+        const data = await res.json();
+        const container = document.getElementById('analyticsContainer');
+        
+        if (!data || data.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:var(--text-muted);">No data available</div>';
+            return;
+        }
+        
+        container.innerHTML = data.map(route => {
+            const isWalking = route.mode === 'Walking' || route.mode === 'Bicycle';
+            const modeInfo = MODE_MAP[route.mode] || MODE_MAP['Default'];
+            
+            return `
+            <div class="analytics-card" style="background:rgba(0,0,0,0.2); border-radius:12px; padding:15px; margin-bottom:15px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <div class="itinerary-dot mode-aware ${modeInfo.class}" style="position:relative; left:0; width:28px; height:28px;">
+                        <i class="fas ${modeInfo.icon}" style="font-size:0.8rem;"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;">${route.route_name}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">${route.origin} → ${route.destination}</div>
+                    </div>
+                    <span class="step-mode" style="margin-left:auto;">${route.mode}</span>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center;">
+                    <div>
+                        <div style="font-size:1.2rem; font-weight:800; color:var(--accent);">${route.total_trips}</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">TRIPS</div>
+                    </div>
+                    <div>
+                        <div style="font-size:1.2rem; font-weight:800; color:var(--primary);">${route.avg_total}m</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">${isWalking ? 'DURATION' : 'AVG TOTAL'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:1.2rem; font-weight:800;">${route.missed_cycles_avg}</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">MISSED</div>
+                    </div>
+                </div>
+                ${!isWalking ? `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div>
+                        <div style="font-size:0.7rem; color:var(--text-muted);">WAIT (${route.min_wait}-${route.max_wait}m)</div>
+                        <div style="font-weight:600;">Avg: ${route.avg_wait}m</div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.7rem; color:var(--text-muted);">TRAVEL (${route.min_travel}-${route.max_travel}m)</div>
+                        <div style="font-weight:600;">Avg: ${route.avg_travel}m</div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>`;
+        }).join('');
+    } catch (e) {
+        console.error("Failed to load analytics:", e);
+        document.getElementById('analyticsContainer').innerHTML = '<div style="text-align:center; color:var(--danger);">Failed to load analytics</div>';
+    }
+}
+
+window.saveSchedule = async function() {
+    const routeId = document.getElementById('scheduleRouteSelect').value;
+    const dayType = document.getElementById('schedDay').value;
+    const interval = document.getElementById('schedInterval').value;
+    const start = document.getElementById('schedStart').value;
+    const end = document.getElementById('schedEnd').value;
+    
+    if (!routeId || !interval) return alert("Please select a route and enter interval.");
+    
+    const body = {
+        route_id: routeId,
+        day_type: dayType,
+        interval_minutes: parseInt(interval),
+        start_time: start,
+        end_time: end
+    };
+    
+    try {
+        const res = await fetch(`${API_URL}/schedule`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        
+        if (!res.ok) throw new Error('Failed to save schedule');
+        
+        alert("Schedule saved successfully!");
+    } catch(e) {
+        alert("Failed to save schedule: " + e.message);
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     loadRoutes();
+    loadPresets();
     setInterval(() => {
         const clock = document.getElementById('mainClock');
-        if(clock) clock.innerText = new Date().toLocaleTimeString([], { hour12: false });
+        if(clock) clock.innerText = new Date().toLocaleTimeString([], { hour12: true });
     }, 1000);
 });

@@ -59,7 +59,6 @@
 
                     <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
                         <button id="btnDropped" class="btn btn-outline" disabled><i class="fas fa-flag-checkered"></i> Drop Off</button>
-                        <button id="btnNext" class="btn btn-outline" disabled><i class="fas fa-shoe-prints"></i> At Next Stop</button>
                     </div>
                 </div>
 
@@ -82,13 +81,24 @@
                     <label>Date</label>
                     <input type="date" id="manualDate" style="margin-bottom:15px">
 
-                    <div class="row">
-                        <div><label>Arrived</label><input type="time" id="manualArrived"></div>
-                        <div><label>Boarded</label><input type="time" id="manualBoarded"></div>
+                    <!-- Vehicle mode inputs -->
+                    <div id="manualVehicleInputs">
+                        <div class="row">
+                            <div><label>Arrived</label><input type="time" id="manualArrived"></div>
+                            <div><label>Boarded</label><input type="time" id="manualBoarded"></div>
+                        </div>
+                        <div class="row" style="margin-top:10px">
+                            <div><label>Departed</label><input type="time" id="manualDeparted"></div>
+                            <div><label>Dropped</label><input type="time" id="manualDropped"></div>
+                        </div>
                     </div>
-                    <div class="row" style="margin-top:10px">
-                        <div><label>Departed</label><input type="time" id="manualDeparted"></div>
-                        <div><label>Dropped</label><input type="time" id="manualDropped"></div>
+
+                    <!-- Walking mode inputs (simplified) -->
+                    <div id="manualWalkingInputs" class="hidden">
+                        <div class="row">
+                            <div><label>Started</label><input type="time" id="manualStarted"></div>
+                            <div><label>Ended</label><input type="time" id="manualEnded"></div>
+                        </div>
                     </div>
                     
                     <div style="margin-top: 15px;">
@@ -108,8 +118,28 @@
 
         <section id="view-predict" class="view-section">
             <div class="card">
+                <label><i class="fas fa-calendar"></i> Date</label>
+                <input type="date" id="predictDate">
+            </div>
+
+            <div class="card">
                 <label><i class="fas fa-clock"></i> Departure Time</label>
                 <input type="time" id="predictStartTime">
+            </div>
+
+            <div class="card">
+                <label><i class="fas fa-bookmark"></i> Saved Routes</label>
+                <select id="presetSelect" onchange="window.loadPreset()">
+                    <option value="">-- Select Preset --</option>
+                </select>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button onclick="window.savePreset()" class="btn small btn-outline" style="flex:1">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button onclick="window.deletePreset()" class="btn small btn-outline" style="flex:1; border-color: var(--danger);">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
             </div>
 
             <div class="card">
@@ -147,22 +177,20 @@
             </div>
         </section>
 
+        <section id="view-analytics" class="view-section">
+            <div class="card">
+                <label><i class="fas fa-chart-line"></i> Route Performance</label>
+                <div id="analyticsContainer" style="margin-top:15px;">
+                    <div style="text-align:center; color:var(--text-muted);">Loading analytics...</div>
+                </div>
+            </div>
+        </section>
+
         <section id="view-manage" class="view-section">
             
             <div class="card">
-                <label><i class="fas fa-chart-area"></i> Efficiency Trend</label>
-                <canvas id="efficiencyChart" style="margin-top:10px;"></canvas>
-            </div>
-
-            <div class="card" style="border-left: 4px solid #8b5cf6;">
-                <h3><i class="fas fa-microscope"></i> System Health</h3>
-                <button onclick="window.runBenchmark()" class="btn btn-outline small" style="margin-bottom:12px;">Run Accuracy Test</button>
-                <div style="overflow-x:auto;">
-                    <table class="data-table" id="benchmarkTable">
-                        <thead><tr><th>Route</th><th>Var</th><th>Acc</th></tr></thead>
-                        <tbody><tr><td colspan="3" class="text-muted" style="text-align:center;">Analyze data to see scores</td></tr></tbody>
-                    </table>
-                </div>
+                <label><i class="fas fa-calendar-alt"></i> Trip Distribution by Day</label>
+                <canvas id="dayChart" style="margin-top:10px;"></canvas>
             </div>
 
             <div class="card">
@@ -210,6 +238,17 @@
                     </table>
                 </div>
             </div>
+
+            <div class="card" style="border-left: 4px solid #8b5cf6;">
+                <h3><i class="fas fa-microscope"></i> System Health</h3>
+                <button onclick="window.runBenchmark()" class="btn btn-outline small" style="margin-bottom:12px;">Run Accuracy Test</button>
+                <div style="overflow-x:auto;">
+                    <table class="data-table" id="benchmarkTable">
+                        <thead><tr><th>Route</th><th>Mode</th><th>Avg</th><th>Var</th><th>Acc</th></tr></thead>
+                        <tbody><tr><td colspan="5" class="text-muted" style="text-align:center;">Analyze data to see scores</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
         </section>
     </div>
 
@@ -219,6 +258,9 @@
         </button>
         <button class="nav-item" onclick="window.switchTab('view-predict', this)">
             <i class="fas fa-bolt nav-icon"></i> <span>Predict</span>
+        </button>
+        <button class="nav-item" onclick="window.switchTab('view-analytics', this)">
+            <i class="fas fa-chart-line nav-icon"></i> <span>Analytics</span>
         </button>
         <button class="nav-item" onclick="window.switchTab('view-manage', this)">
             <i class="fas fa-sliders-h nav-icon"></i> <span>Config</span>

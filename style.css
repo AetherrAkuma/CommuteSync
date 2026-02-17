@@ -173,6 +173,29 @@ input:focus, select:focus { border-color: var(--primary); background: rgba(15, 2
 }
 .meta-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px; }
 
+.step-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 5px;
+}
+.step-title { font-weight: 700; font-size: 0.95rem; }
+.step-mode { 
+    font-size: 0.65rem; 
+    background: rgba(255, 255, 255, 0.1); 
+    padding: 3px 8px; 
+    border-radius: 8px; 
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.step-route {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    opacity: 0.8;
+}
+
 .risk-alert { 
     margin-top: 10px; 
     font-size: 0.75rem; 
