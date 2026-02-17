@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 // CORS configuration - allow specific origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
     ? process.env.ALLOWED_ORIGINS.split(',') 
-    : ['http://localhost:3000', 'https://commutesync.onrender.com', "http://127.0.0.1:5500", "https://commute-sync.netlify.app"];
+    : ['https://commutesync.onrender.com', "http://127.0.0.1:5500", "https://commute-sync.netlify.app"];
 
 app.use(cors({
     origin: allowedOrigins,
