@@ -17,6 +17,65 @@ function getUserId(req) {
     return req.query.user_id || req.headers['x-user-id'] || null;
 }
 
+// 0. AUTH - Register (optional, can be disabled via Supabase Auth)
+app.post('/api/register', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password required" });
+        }
+        
+        // Check if registration is enabled
+        const registrationEnabled = process.env.ENABLE_REGISTRATION === 'true';
+        
+        if (!registrationEnabled) {
+            return res.status(403).json({ error: "Registration is disabled" });
+        }
+        
+        // Use Supabase Auth to create user
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password
+        });
+        
+        if (error) throw error;
+        
+        res.status(201).json({ 
+            success: true, 
+            user_id: data.user?.id,
+            message: "User registered successfully" 
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 0. AUTH - Login using Supabase Auth
+app.post('/api/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password required" });
+        }
+        
+        // Use Supabase Auth to sign in
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+        
+        if (error) {
+            return res.status(401).json({ error: error.message });
+        }
+        
+        res.json({ 
+            success: true, 
+            user_id: data.user?.id,
+            email: data.user?.email 
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // 1. GET ALL ROUTES
 app.get('/api/routes', async (req, res) => {
     try {

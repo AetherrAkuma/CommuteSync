@@ -24,6 +24,11 @@ let availableRoutes = [];
 let myChart = null;
 let currentMode = "Vehicle";
 
+// --- AUTH STATE ---
+let currentUserId = localStorage.getItem('commutesync_user_id');
+let currentUsername = localStorage.getItem('commutesync_email') || localStorage.getItem('commutesync_username');
+let currentEmail = localStorage.getItem('commutesync_email');
+
 // ==========================================
 // 1. FAIL-SAFE HELPERS
 // ==========================================
@@ -115,7 +120,7 @@ let dayChart = null;
 
 async function loadDayChart() {
     try {
-        const res = await fetch(`${API_URL}/day-stats`);
+        const res = await apiFetch(`${API_URL}/day-stats`);
         const { labels, data } = await res.json();
         
         if (!data || data.every(v => v === 0)) {
@@ -163,7 +168,7 @@ async function loadDayChart() {
 
 async function runBenchmark() {
     try {
-        const res = await fetch(`${API_URL}/benchmark`);
+        const res = await apiFetch(`${API_URL}/benchmark`);
         const data = await res.json();
         const tbody = document.querySelector('#benchmarkTable tbody');
         if(!tbody) return;
@@ -194,7 +199,7 @@ async function runBenchmark() {
 
 async function loadLogs() {
     try {
-        const res = await fetch(`${API_URL}/logs`);
+        const res = await apiFetch(`${API_URL}/logs`);
         const logs = await res.json();
         const tbody = document.querySelector('#logsTable tbody');
         if (!tbody) return;
@@ -227,7 +232,7 @@ async function loadLogs() {
 
 async function loadRoutes() {
     try {
-        const res = await fetch(`${API_URL}/routes`);
+        const res = await apiFetch(`${API_URL}/routes`);
         availableRoutes = await res.json();
         
         const logSelect = document.getElementById('logRouteSelect');
@@ -386,7 +391,7 @@ function addRouteToChain() {
 
 async function loadPresets() {
     try {
-        const res = await fetch(`${API_URL}/presets`);
+        const res = await apiFetch(`${API_URL}/presets`);
         const presets = await res.json();
         const select = document.getElementById('presetSelect');
         
@@ -686,8 +691,14 @@ window.createNewRoute = async function() {
     
     const body = { name, origin, destination, mode };
     
+    // Include user_id if logged in
+    if (currentUserId) {
+        body.user_id = currentUserId;
+    }
+    
     try {
-        const res = await fetch(`${API_URL}/routes`, {
+        const url = getApiUrl(`${API_URL}/routes`);
+        const res = await fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body)
@@ -803,8 +814,102 @@ window.saveSchedule = async function() {
 document.addEventListener('DOMContentLoaded', () => {
     loadRoutes();
     loadPresets();
+    checkLoginStatus();
     setInterval(() => {
         const clock = document.getElementById('mainClock');
         if(clock) clock.innerText = new Date().toLocaleTimeString([], { hour12: true });
     }, 1000);
 });
+
+// ==========================================
+// AUTH FUNCTIONS
+// ==========================================
+
+// Helper to add user_id to API calls - CRITICAL for multi-user support!
+function getApiUrl(endpoint) {
+    const url = new URL(endpoint, API_URL);
+    if (currentUserId) {
+        url.searchParams.set('user_id', currentUserId);
+    }
+    return url.toString();
+}
+
+// Updated fetch wrapper that includes user_id
+async function apiFetch(endpoint, options = {}) {
+    const url = getApiUrl(endpoint);
+    return fetch(url, options);
+}
+
+function checkLoginStatus() {
+    if (currentUserId) {
+        document.getElementById('loginBtnText').innerText = currentUsername || 'Logout';
+        // Hide login modal when logged in
+        document.getElementById('loginModal').classList.add('hidden');
+    } else {
+        document.getElementById('loginBtnText').innerText = 'Login';
+        // Show login modal when not logged in
+        document.getElementById('loginModal').classList.remove('hidden');
+    }
+}
+
+window.showLoginModal = function() {
+    if (currentUserId) {
+        // Already logged in - logout
+        if (confirm('Logout?')) {
+            localStorage.removeItem('commutesync_user_id');
+            localStorage.removeItem('commutesync_username');
+            localStorage.removeItem('commutesync_email');
+            currentUserId = null;
+            currentUsername = null;
+            currentEmail = null;
+            checkLoginStatus();
+            location.reload();
+        }
+    } else {
+        document.getElementById('loginModal').classList.remove('hidden');
+        document.getElementById('loginError').innerText = '';
+    }
+};
+
+window.closeLoginModal = function() {
+    document.getElementById('loginModal').classList.add('hidden');
+};
+
+window.doLogin = async function() {
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorEl = document.getElementById('loginError');
+    
+    if (!email || !password) {
+        errorEl.innerText = 'Please enter email and password';
+        return;
+    }
+    
+    try {
+        const res = await fetch(`${API_URL}/login`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            errorEl.innerText = data.error || 'Login failed';
+            return;
+        }
+        
+        // Save login
+        localStorage.setItem('commutesync_user_id', data.user_id);
+        localStorage.setItem('commutesync_email', data.email);
+        currentUserId = data.user_id;
+        currentUsername = data.email;
+        currentEmail = data.email;
+        
+        checkLoginStatus();
+        closeLoginModal();
+        location.reload();
+    } catch (e) {
+        errorEl.innerText = 'Connection error';
+    }
+};
