@@ -7,7 +7,15 @@ const ss = require('simple-statistics');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
+// CORS configuration - allow specific origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : ['http://localhost:3000', 'http://localhost:8080'];
+
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);

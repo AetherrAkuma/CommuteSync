@@ -39,6 +39,7 @@ Add these environment variables in Render dashboard:
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_KEY` | Your Supabase anon key |
 | `PORT` | 10000 |
+| `ALLOWED_ORIGINS` | Your Cloudflare domain (e.g., `https://commutesync.pages.dev`) |
 
 ### Step 3: Deploy
 
