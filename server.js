@@ -12,23 +12,42 @@ app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+// Helper to get user_id from query param or header
+function getUserId(req) {
+    return req.query.user_id || req.headers['x-user-id'] || null;
+}
+
 // 1. GET ALL ROUTES
 app.get('/api/routes', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('routes').select('*').order('name', { ascending: true });
+        const userId = getUserId(req);
+        let query = supabase.from('routes').select('*').order('name', { ascending: true });
+        
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+        
+        const { data, error } = await query;
         if (error) throw error;
         res.json(data || []);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. GET TRIP HISTORY (The Fix)
+// 2. GET TRIP HISTORY
 app.get('/api/logs', async (req, res) => {
     try {
-        const { data, error } = await supabase
+        const userId = getUserId(req);
+        let query = supabase
             .from('trip_logs')
             .select('*, routes(name, mode)')
             .order('date', { ascending: false })
             .limit(50);
+        
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+        
+        const { data, error } = await query;
         if (error) throw error;
         res.json(data || []);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -38,7 +57,9 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/log', async (req, res) => {
     try {
         const { route_id, date, timestamps, missed_cycles } = req.body;
-        const { data, error } = await supabase.from('trip_logs').insert([{
+        const userId = getUserId(req);
+        
+        const logData = {
             route_id, date,
             timestamp_arrived_pickup: timestamps.arrived || "00:00:00",
             timestamp_boarded: timestamps.boarded || "00:00:00",
@@ -46,7 +67,13 @@ app.post('/api/log', async (req, res) => {
             timestamp_arrived_dropoff: timestamps.dropped || "00:00:00",
             timestamp_reached_next: timestamps.nextStop || null,
             missed_cycles: missed_cycles || 0
-        }]).select();
+        };
+        
+        if (userId) {
+            logData.user_id = userId;
+        }
+        
+        const { data, error } = await supabase.from('trip_logs').insert([logData]).select();
         if (error) throw error;
         res.status(201).json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -56,6 +83,7 @@ app.post('/api/log', async (req, res) => {
 app.post('/api/predict', async (req, res) => {
     try {
         const { route_ids, start_time, date } = req.body;
+        const userId = getUserId(req);
         
         // Use provided date or current date
         const targetDate = date ? new Date(date) : new Date();
@@ -67,17 +95,29 @@ app.post('/api/predict', async (req, res) => {
 
         for (const id of route_ids) {
             // Get route info to determine mode, name, origin, destination
-            const { data: routeData } = await supabase.from('routes').select('mode, name, origin, destination').eq('id', id).single();
+            let routeQuery = supabase.from('routes').select('mode, name, origin, destination').eq('id', id);
+            if (userId) {
+                routeQuery = routeQuery.eq('user_id', userId);
+            }
+            const { data: routeData } = await routeQuery.single();
             const routeMode = routeData?.mode || 'QCBus';
             const isWalking = routeMode === 'Walking' || routeMode === 'Bicycle';
             
-            const { data: logs } = await supabase.from('trip_logs').select('*').eq('route_id', id);
+            let logsQuery = supabase.from('trip_logs').select('*').eq('route_id', id);
+            if (userId) {
+                logsQuery = logsQuery.eq('user_id', userId);
+            }
+            const { data: logs } = await logsQuery;
             
             // Get schedules for this route and find matching time window
-            const { data: schedules } = await supabase.from('route_schedules')
+            let schedulesQuery = supabase.from('route_schedules')
                 .select('*')
                 .eq('route_id', id)
                 .eq('day_type', dayType);
+            if (userId) {
+                schedulesQuery = schedulesQuery.eq('user_id', userId);
+            }
+            const { data: schedules } = await schedulesQuery;
             
             // Find schedule that matches the start time
             let interval = 0;
@@ -168,8 +208,15 @@ app.post('/api/predict', async (req, res) => {
 // 5. OTHER UTILS
 app.post('/api/routes', async (req, res) => {
     try {
-        console.log("Creating route with data:", req.body);
-        const { data, error } = await supabase.from('routes').insert([req.body]).select();
+        const userId = getUserId(req);
+        const routeData = { ...req.body };
+        
+        if (userId) {
+            routeData.user_id = userId;
+        }
+        
+        console.log("Creating route with data:", routeData);
+        const { data, error } = await supabase.from('routes').insert([routeData]).select();
         if (error) {
             console.error("Supabase error:", error);
             return res.status(500).json(error);
@@ -199,14 +246,22 @@ app.post('/api/drop-constraint', async (req, res) => {
 // 6. SAVE SCHEDULE
 app.post('/api/schedule', async (req, res) => {
     try {
+        const userId = getUserId(req);
         const { route_id, day_type, interval_minutes, start_time, end_time } = req.body;
-        const { data, error } = await supabase.from('route_schedules').insert([{
+        
+        const scheduleData = {
             route_id,
             day_type,
             interval_minutes,
             start_time,
             end_time
-        }]).select();
+        };
+        
+        if (userId) {
+            scheduleData.user_id = userId;
+        }
+        
+        const { data, error } = await supabase.from('route_schedules').insert([scheduleData]).select();
         if (error) throw error;
         res.status(201).json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -215,7 +270,14 @@ app.post('/api/schedule', async (req, res) => {
 // 7. PRESETS
 app.get('/api/presets', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('presets').select('*').order('name', { ascending: true });
+        const userId = getUserId(req);
+        let query = supabase.from('presets').select('*').order('name', { ascending: true });
+        
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+        
+        const { data, error } = await query;
         if (error) throw error;
         res.json(data || []);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -223,11 +285,16 @@ app.get('/api/presets', async (req, res) => {
 
 app.post('/api/presets', async (req, res) => {
     try {
+        const userId = getUserId(req);
         const { name, route_ids } = req.body;
-        const { data, error } = await supabase.from('presets').insert([{
-            name,
-            route_ids
-        }]).select();
+        
+        const presetData = { name, route_ids };
+        
+        if (userId) {
+            presetData.user_id = userId;
+        }
+        
+        const { data, error } = await supabase.from('presets').insert([presetData]).select();
         if (error) throw error;
         res.status(201).json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -244,7 +311,14 @@ app.delete('/api/presets/:id', async (req, res) => {
 
 app.get('/api/benchmark', async (req, res) => {
     try {
-        const { data: logs } = await supabase.from('trip_logs').select('*, routes(name, mode)').not('timestamp_arrived_dropoff', 'is', null);
+        const userId = getUserId(req);
+        let logsQuery = supabase.from('trip_logs').select('*, routes(name, mode)').not('timestamp_arrived_dropoff', 'is', null);
+        
+        if (userId) {
+            logsQuery = logsQuery.eq('user_id', userId);
+        }
+        
+        const { data: logs } = await logsQuery;
         
         if (!logs || logs.length === 0) {
             res.json([]);
@@ -293,7 +367,14 @@ app.get('/api/benchmark', async (req, res) => {
 // 8. DAY OF WEEK DISTRIBUTION
 app.get('/api/day-stats', async (req, res) => {
     try {
-        const { data: logs } = await supabase.from('trip_logs').select('date');
+        const userId = getUserId(req);
+        let logsQuery = supabase.from('trip_logs').select('date');
+        
+        if (userId) {
+            logsQuery = logsQuery.eq('user_id', userId);
+        }
+        
+        const { data: logs } = await logsQuery;
         
         if (!logs || logs.length === 0) {
             res.json({ labels: [], data: [] });
@@ -321,9 +402,19 @@ app.get('/api/day-stats', async (req, res) => {
 // 9. ANALYTICS
 app.get('/api/analytics', async (req, res) => {
     try {
-        // Get all routes with their stats
-        const { data: routes } = await supabase.from('routes').select('*');
-        const { data: logs } = await supabase.from('trip_logs').select('*');
+        const userId = getUserId(req);
+        
+        // Get user's routes with their stats
+        let routesQuery = supabase.from('routes').select('*');
+        let logsQuery = supabase.from('trip_logs').select('*');
+        
+        if (userId) {
+            routesQuery = routesQuery.eq('user_id', userId);
+            logsQuery = logsQuery.eq('user_id', userId);
+        }
+        
+        const { data: routes } = await routesQuery;
+        const { data: logs } = await logsQuery;
         
         const analytics = routes.map(route => {
             const routeLogs = logs.filter(l => l.route_id === route.id);
