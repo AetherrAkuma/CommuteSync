@@ -74,11 +74,13 @@ const API_URL = 'https://your-render-service.onrender.com/api';
 
 ```
 Production branch: main
-Build command: (leave empty)
+Build command: (leave COMPLETELY EMPTY - delete any text)
 Output directory: .
 ```
 
 5. Click **Save and Deploy**
+
+**IMPORTANT:** Make sure to remove any build command. If it says "No build command" or anything else, delete it!
 
 ### Step 3: Custom Domain (Optional)
 

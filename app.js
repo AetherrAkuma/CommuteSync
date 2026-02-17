@@ -4,7 +4,7 @@
  */
 
 const ss = window.ss || window.statistics;
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://commutesync.onrender.com/api';
 
 // --- CONFIGURATION: TRANSPORT MODES ---
 const MODE_MAP = {
