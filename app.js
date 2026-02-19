@@ -24,6 +24,197 @@ let availableRoutes = [];
 let myChart = null;
 let currentMode = "Vehicle";
 
+// --- LOCALSTORAGE PERSISTENCE FOR LOGGER ---
+const LOGGER_STORAGE_KEY = 'commutesync_logger_data';
+
+// Save to both localStorage and server
+async function saveLoggerState() {
+    // Save to localStorage as backup
+    const state = {
+        timestamps: tripData.timestamps,
+        missedCycles: missedCycles,
+        savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(LOGGER_STORAGE_KEY, JSON.stringify(state));
+    
+    // Save to server if user is logged in
+    if (currentUserId) {
+        try {
+            const routeId = document.getElementById('logRouteSelect')?.value;
+            await fetch(`${API_URL}/logger-session?user_id=${currentUserId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    route_id: routeId,
+                    timestamps: tripData.timestamps,
+                    missed_cycles: missedCycles
+                })
+            });
+        } catch (e) {
+            console.warn("Failed to save to server, using local backup:", e);
+        }
+    }
+}
+
+// Load from server first, then localStorage
+async function loadLoggerState() {
+    // First try to load from server if user is logged in
+    if (currentUserId) {
+        try {
+            const res = await fetch(`${API_URL}/logger-session?user_id=${currentUserId}`);
+            const session = await res.json();
+            
+            if (session && session.timestamps && Object.keys(session.timestamps).length > 0) {
+                tripData.timestamps = session.timestamps;
+                missedCycles = session.missed_cycles || 0;
+                
+                // Restore route if available
+                if (session.route_id) {
+                    const routeSelect = document.getElementById('logRouteSelect');
+                    if (routeSelect) {
+                        routeSelect.value = session.route_id;
+                        // Trigger change event to update route details
+                        routeSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+                
+                // Restore UI
+                restoreLoggerUI();
+                document.getElementById('logStatus').innerText = 'Session restored from server';
+                return true;
+            }
+        } catch (e) {
+            console.warn("Failed to load from server, trying local backup:", e);
+        }
+    }
+    
+    // Fallback to localStorage
+    const stored = localStorage.getItem(LOGGER_STORAGE_KEY);
+    if (stored) {
+        try {
+            const state = JSON.parse(stored);
+            tripData.timestamps = state.timestamps || {};
+            missedCycles = state.missedCycles || 0;
+            
+            // Restore UI if we have data
+            if (Object.keys(tripData.timestamps).length > 0) {
+                restoreLoggerUI();
+            }
+            return true;
+        } catch (e) {
+            console.error("Failed to load logger state:", e);
+            return false;
+        }
+    }
+    return false;
+}
+
+// Clear session from both server and localStorage
+async function clearLoggerState() {
+    // Clear localStorage
+    localStorage.removeItem(LOGGER_STORAGE_KEY);
+    
+    // Clear server session if user is logged in
+    if (currentUserId) {
+        try {
+            await fetch(`${API_URL}/logger-session?user_id=${currentUserId}`, {
+                method: 'DELETE'
+            });
+        } catch (e) {
+            console.warn("Failed to clear server session:", e);
+        }
+    }
+}
+
+async function resetLogger() {
+    if (!confirm("Reset logger? This will clear all recorded times.")) return;
+    
+    tripData = { timestamps: {} };
+    missedCycles = 0;
+    
+    // Clear both localStorage and server
+    await clearLoggerState();
+    
+    // Reset UI
+    resetLoggerUI();
+    
+    document.getElementById('logStatus').innerText = 'Logger reset - Ready';
+}
+
+function restoreLoggerUI() {
+    const timestamps = tripData.timestamps;
+    
+    // Restore buttons based on what was recorded
+    if (timestamps.arrived) {
+        const btn = document.getElementById('btnArrived');
+        btn.className = "btn btn-success";
+        btn.disabled = true;
+        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-stopwatch"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.arrived)}</span> <i class="fas fa-check"></i>`;
+        
+        document.getElementById('btnBoarded').disabled = false;
+        document.getElementById('btnBoarded').className = "btn btn-primary";
+    }
+    
+    if (timestamps.boarded) {
+        const btn = document.getElementById('btnBoarded');
+        btn.className = "btn btn-success";
+        btn.disabled = true;
+        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-ticket-alt"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.boarded)}</span> <i class="fas fa-check"></i>`;
+        
+        document.getElementById('btnDeparted').disabled = false;
+        document.getElementById('btnDeparted').className = "btn btn-primary";
+    }
+    
+    if (timestamps.departed) {
+        const btn = document.getElementById('btnDeparted');
+        btn.className = "btn btn-success";
+        btn.disabled = true;
+        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-bus"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.departed)}</span> <i class="fas fa-check"></i>`;
+        
+        enableEndingStage();
+    }
+    
+    if (timestamps.dropped) {
+        const btn = document.getElementById('btnDropped');
+        btn.className = "btn btn-success";
+        btn.disabled = true;
+        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-flag-checkered"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.dropped)}</span> <i class="fas fa-check"></i>`;
+        
+        document.getElementById('saveSection').classList.remove('hidden');
+    }
+    
+    // Restore missed cycles
+    document.getElementById('cycleCount').innerText = missedCycles;
+    
+    document.getElementById('logStatus').innerText = 'Session restored from previous session';
+}
+
+function resetLoggerUI() {
+    // Reset all buttons to initial state
+    const btnArrived = document.getElementById('btnArrived');
+    btnArrived.className = "btn btn-primary";
+    btnArrived.disabled = false;
+    btnArrived.innerHTML = '<i class="fas fa-stopwatch"></i> I\'m at the Stop';
+    
+    const btnBoarded = document.getElementById('btnBoarded');
+    btnBoarded.className = "btn btn-outline";
+    btnBoarded.disabled = true;
+    btnBoarded.innerHTML = '<i class="fas fa-ticket-alt"></i> Boarding';
+    
+    const btnDeparted = document.getElementById('btnDeparted');
+    btnDeparted.className = "btn btn-outline";
+    btnDeparted.disabled = true;
+    btnDeparted.innerHTML = '<i class="fas fa-bus"></i> Departing';
+    
+    const btnDropped = document.getElementById('btnDropped');
+    btnDropped.className = "btn btn-outline";
+    btnDropped.disabled = true;
+    btnDropped.innerHTML = '<i class="fas fa-flag-checkered"></i> Drop Off';
+    
+    document.getElementById('saveSection').classList.add('hidden');
+    document.getElementById('cycleCount').innerText = '0';
+}
+
 // --- AUTH STATE ---
 let currentUserId = localStorage.getItem('commutesync_user_id');
 let currentUsername = localStorage.getItem('commutesync_email') || localStorage.getItem('commutesync_username');
@@ -302,6 +493,8 @@ actionBtns.forEach((id, index) => {
             } else {
                 enableEndingStage();
             }
+            // Save state to localStorage for persistence
+            saveLoggerState();
         };
     }
 });
@@ -314,6 +507,8 @@ document.getElementById('btnStartWalk').onclick = function() {
     this.disabled = true;
     this.innerHTML = `<i class="fas fa-walking"></i> <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
     enableEndingStage();
+    // Save state to localStorage for persistence
+    saveLoggerState();
 };
 
 function enableEndingStage() {
@@ -330,6 +525,8 @@ document.getElementById('btnDropped').onclick = function() {
     this.disabled = true;
     this.innerHTML = this.innerHTML.replace(/<i class="fas fa-flag-checkered"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
     document.getElementById('saveSection').classList.remove('hidden');
+    // Save state to localStorage for persistence
+    saveLoggerState();
 };
 
 document.getElementById('btnSaveLog').onclick = async function() {
@@ -356,6 +553,9 @@ document.getElementById('btnSaveLog').onclick = async function() {
         });
         
         if (!res.ok) throw new Error('Save failed');
+        
+        // Clear both localStorage and server session after successful save
+        await clearLoggerState();
         
         alert("Trip saved successfully!");
         location.reload();
@@ -646,7 +846,8 @@ function switchTab(viewId, btn) {
 window.switchTab = switchTab;
 window.runBenchmark = runBenchmark;
 window.saveManualLog = saveManualLog;
-window.adjustCycles = (a) => { missedCycles = Math.max(0, missedCycles + a); document.getElementById('cycleCount').innerText = missedCycles; };
+window.resetLogger = resetLogger;
+window.adjustCycles = (a) => { missedCycles = Math.max(0, missedCycles + a); document.getElementById('cycleCount').innerText = missedCycles; saveLoggerState(); };
 window.calculatePrediction = calculatePrediction;
 window.addRouteToChain = addRouteToChain;
 window.toggleManualMode = () => {
@@ -815,6 +1016,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoutes();
     loadPresets();
     checkLoginStatus();
+    // Load logger state from localStorage for persistence
+    loadLoggerState();
     setInterval(() => {
         const clock = document.getElementById('mainClock');
         if(clock) clock.innerText = new Date().toLocaleTimeString([], { hour12: true });

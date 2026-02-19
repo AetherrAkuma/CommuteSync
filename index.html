@@ -58,9 +58,12 @@
 
         <section id="view-log" class="view-section active">
             
-            <div style="text-align: right; margin-bottom: 15px;">
+            <div style="text-align: right; margin-bottom: 15px; display: flex; gap: 8px; justify-content: flex-end;">
                 <button class="btn small btn-outline" onclick="window.toggleManualMode()" style="width: auto;">
                     <i class="fas fa-edit"></i> Manual Backfill
+                </button>
+                <button class="btn small btn-outline" onclick="window.resetLogger()" style="width: auto; border-color: var(--danger); color: var(--danger);">
+                    <i class="fas fa-redo"></i> Reset
                 </button>
             </div>
 

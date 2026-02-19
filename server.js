@@ -466,6 +466,204 @@ app.get('/api/day-stats', async (req, res) => {
     }
 });
 
+// 10. LOGGER SESSION - Server-side persistence
+// GET current in-progress session
+app.get('/api/logger-session', async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        
+        let query = supabase
+            .from('logger_sessions')
+            .select('*')
+            .eq('status', 'in_progress')
+            .order('created_at', { ascending: false })
+            .limit(1);
+        
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+            res.json(data[0]);
+        } else {
+            res.json(null);
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST create or update session
+app.post('/api/logger-session', async (req, res) => {
+    try {
+        const { route_id, timestamps, missed_cycles } = req.body;
+        const userId = getUserId(req);
+        
+        if (!userId) {
+            return res.status(400).json({ error: "User ID required" });
+        }
+        
+        // Check for existing in-progress session
+        let existingQuery = supabase
+            .from('logger_sessions')
+            .select('id')
+            .eq('status', 'in_progress')
+            .eq('user_id', userId)
+            .limit(1);
+        
+        const { data: existing } = await existingQuery;
+        
+        if (existing && existing.length > 0) {
+            // Update existing session
+            const { data, error } = await supabase
+                .from('logger_sessions')
+                .update({
+                    route_id,
+                    timestamps,
+                    missed_cycles,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existing[0].id)
+                .select()
+                .single();
+            
+            if (error) throw error;
+            res.json(data);
+        } else {
+            // Create new session
+            const { data, error } = await supabase
+                .from('logger_sessions')
+                .insert([{
+                    user_id: userId,
+                    route_id,
+                    timestamps,
+                    missed_cycles,
+                    status: 'in_progress'
+                }])
+                .select()
+                .single();
+            
+            if (error) throw error;
+            res.status(201).json(data);
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE clear session (after save or manual reset)
+app.delete('/api/logger-session', async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        
+        if (!userId) {
+            return res.status(400).json({ error: "User ID required" });
+        }
+        
+        const { error } = await supabase
+            .from('logger_sessions')
+            .delete()
+            .eq('status', 'in_progress')
+            .eq('user_id', userId);
+        
+        if (error) throw error;
+        
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 11. SINGLE TIMESTAMP - For Shortcuts/MacroDroid integration
+// POST a single timestamp (arrived, boarded, departed, or dropped)
+app.post('/api/log-timestamp', async (req, res) => {
+    try {
+        const { route_id, timestamp_type, time, missed_cycles } = req.body;
+        const userId = getUserId(req);
+        
+        if (!userId) {
+            return res.status(400).json({ error: "User ID required (add ?user_id=YOUR_ID to URL)" });
+        }
+        
+        if (!route_id || !timestamp_type || !time) {
+            return res.status(400).json({ error: "route_id, timestamp_type, and time are required" });
+        }
+        
+        // Valid timestamp types
+        const validTypes = ['arrived', 'boarded', 'departed', 'dropped'];
+        if (!validTypes.includes(timestamp_type)) {
+            return res.status(400).json({ error: "timestamp_type must be: arrived, boarded, departed, or dropped" });
+        }
+        
+        // Find existing in-progress session for this user
+        let existingQuery = supabase
+            .from('logger_sessions')
+            .select('*')
+            .eq('status', 'in_progress')
+            .eq('user_id', userId)
+            .limit(1);
+        
+        const { data: existing } = await existingQuery;
+        
+        let sessionId;
+        let currentTimestamps = {};
+        let currentMissedCycles = missed_cycles || 0;
+        
+        if (existing && existing.length > 0) {
+            // Use existing session
+            sessionId = existing[0].id;
+            currentTimestamps = existing[0].timestamps || {};
+            currentMissedCycles = existing[0].missed_cycles || 0;
+        } else {
+            // Create new session if none exists
+            // If this is not the first timestamp (arrived), we can't proceed
+            if (timestamp_type !== 'arrived') {
+                return res.status(400).json({ error: "No active session. Start with arrived timestamp." });
+            }
+        }
+        
+        // Update the timestamp
+        currentTimestamps[timestamp_type] = time;
+        
+        // Preserve missed_cycles if not provided
+        if (missed_cycles === undefined || missed_cycles === null) {
+            missed_cycles = currentMissedCycles;
+        }
+        
+        if (sessionId) {
+            // Update existing session
+            const { data, error } = await supabase
+                .from('logger_sessions')
+                .update({
+                    route_id,
+                    timestamps: currentTimestamps,
+                    missed_cycles,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', sessionId)
+                .select()
+                .single();
+            
+            if (error) throw error;
+            res.json({ success: true, session: data });
+        } else {
+            // Create new session
+            const { data, error } = await supabase
+                .from('logger_sessions')
+                .insert([{
+                    user_id: userId,
+                    route_id,
+                    timestamps: currentTimestamps,
+                    missed_cycles,
+                    status: 'in_progress'
+                }])
+                .select()
+                .single();
+            
+            if (error) throw error;
+            res.status(201).json({ success: true, session: data });
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // 9. ANALYTICS
 app.get('/api/analytics', async (req, res) => {
     try {
