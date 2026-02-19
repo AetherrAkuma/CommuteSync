@@ -1223,8 +1223,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoutes();
     loadPresets();
     checkLoginStatus();
-    // Load logger state from localStorage for persistence
-    loadLoggerState();
     // Start status checker
     checkSystemStatus();
     setInterval(() => {
@@ -1297,6 +1295,9 @@ function checkLoginStatus() {
         if (mainContent) mainContent.classList.remove('hidden');
         // Show nav bar
         if (navBar) navBar.style.display = 'flex';
+        
+        // Load logger state from server after login
+        loadLoggerState();
     } else {
         document.getElementById('loginBtnText').innerText = 'Login';
         // Show login modal when not logged in
