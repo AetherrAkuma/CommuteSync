@@ -11,32 +11,7 @@
 </head>
 <body>
 
-    <div class="app-container hidden" id="mainContent">
-        
-    <header>
-        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
-            <h1 style="margin: 0;">CommuteSync</h1>
-            <div id="statusIndicator" class="status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-green); box-shadow: 0 0 8px var(--apple-green);"></div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div id="statusText" style="font-size: 0.7rem; color: var(--text-secondary);">All systems online</div>
-            <button id="loginBtn" class="btn small btn-outline" onclick="window.showLoginModal()" style="width: auto; padding: 8px 14px;">
-                <i class="fas fa-user"></i> <span id="loginBtnText">Login</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Feedback Modal -->
-    <div id="feedbackModal" class="modal hidden">
-        <div class="modal-content" style="text-align:center;">
-            <div id="feedbackIcon" style="margin-bottom:16px;"></div>
-            <h2 id="feedbackTitle" style="margin-bottom:8px; font-size:1.25rem;">Success</h2>
-            <p id="feedbackMessage" style="color:var(--text-secondary); margin-bottom:20px; font-size:0.9rem;">Message here</p>
-            <button id="feedbackBtn" class="btn btn-primary">OK</button>
-        </div>
-    </div>
-
-    <!-- Login Modal -->
+    <!-- Login Modal - Outside mainContent so it's always visible -->
     <div id="loginModal" class="modal">
         <div class="modal-content" style="text-align:center;">
             <div style="margin-bottom:20px;">
@@ -62,6 +37,31 @@
             <p id="loginError" style="color:var(--apple-red); margin-top:16px; text-align:center; font-size:0.8rem;"></p>
         </div>
     </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedbackModal" class="modal hidden">
+        <div class="modal-content" style="text-align:center;">
+            <div id="feedbackIcon" style="margin-bottom:16px;"></div>
+            <h2 id="feedbackTitle" style="margin-bottom:8px; font-size:1.25rem;">Success</h2>
+            <p id="feedbackMessage" style="color:var(--text-secondary); margin-bottom:20px; font-size:0.9rem;">Message here</p>
+            <button id="feedbackBtn" class="btn btn-primary">OK</button>
+        </div>
+    </div>
+
+    <div class="app-container hidden" id="mainContent">
+        
+    <header>
+        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+            <h1 style="margin: 0;">CommuteSync</h1>
+            <div id="statusIndicator" class="status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-green); box-shadow: 0 0 8px var(--apple-green);"></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div id="statusText" style="font-size: 0.7rem; color: var(--text-secondary);">All systems online</div>
+            <button id="loginBtn" class="btn small btn-outline" onclick="window.showLoginModal()" style="width: auto; padding: 8px 14px;">
+                <i class="fas fa-user"></i> <span id="loginBtnText">Login</span>
+            </button>
+        </div>
+    </header>
 
         <!-- Logger View -->
         <section id="view-log" class="view-section active">
