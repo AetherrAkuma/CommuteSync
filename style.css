@@ -226,19 +226,23 @@ input:focus, select:focus { border-color: var(--primary); background: rgba(15, 2
 /* --- NAVIGATION & UTILS --- */
 .nav-bar {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100% - 40px);
+    background: rgba(30, 30, 30, 0.85);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
     display: flex;
-    justify-content: space-around;
-    padding: 12px 8px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.3);
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    border-radius: 50px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Hide nav bar when login modal is visible */
@@ -249,22 +253,40 @@ body:not(.logged-in) .nav-bar {
 .nav-item {
     background: none;
     border: none;
-    color: var(--text-muted);
-    font-size: 0.65rem;
-    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.6rem;
+    font-weight: 500;
     display: flex;
     flex-direction: column;
     align-items: center;
-    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    padding: 8px 12px;
-    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 8px 16px;
+    border-radius: 24px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+    min-width: 64px;
+    position: relative;
 }
 
-.nav-item:active { transform: scale(0.95); }
-.nav-item.active { color: var(--primary); }
-.nav-icon { font-size: 1.3rem; margin-bottom: 2px; }
+.nav-item:active { 
+    transform: scale(0.92); 
+}
+
+.nav-item.active { 
+    color: white;
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.nav-icon { 
+    font-size: 1.4rem; 
+    margin-bottom: 2px;
+    transition: transform 0.3s ease;
+}
+
+.nav-item.active .nav-icon {
+    transform: scale(1.1);
+}
 
 .timer-display { font-size: 3rem; font-weight: 800; text-align: center; margin: 20px 0; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
 .view-section { display: none; opacity: 0; }
