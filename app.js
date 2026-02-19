@@ -317,7 +317,7 @@ function restoreLoggerUI() {
         const btn = document.getElementById('btnArrived');
         btn.className = "btn btn-success";
         btn.disabled = true;
-        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-stopwatch"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.arrived)}</span> <i class="fas fa-check"></i>`;
+        btn.innerHTML = `<i class="fas fa-stopwatch"></i> ${formatTime12hr(timestamps.arrived)} <i class="fas fa-check"></i>`;
         
         document.getElementById('btnBoarded').disabled = false;
         document.getElementById('btnBoarded').className = "btn btn-primary";
@@ -327,7 +327,7 @@ function restoreLoggerUI() {
         const btn = document.getElementById('btnBoarded');
         btn.className = "btn btn-success";
         btn.disabled = true;
-        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-ticket-alt"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.boarded)}</span> <i class="fas fa-check"></i>`;
+        btn.innerHTML = `<i class="fas fa-ticket-alt"></i> ${formatTime12hr(timestamps.boarded)} <i class="fas fa-check"></i>`;
         
         document.getElementById('btnDeparted').disabled = false;
         document.getElementById('btnDeparted').className = "btn btn-primary";
@@ -337,7 +337,7 @@ function restoreLoggerUI() {
         const btn = document.getElementById('btnDeparted');
         btn.className = "btn btn-success";
         btn.disabled = true;
-        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-bus"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.departed)}</span> <i class="fas fa-check"></i>`;
+        btn.innerHTML = `<i class="fas fa-bus"></i> ${formatTime12hr(timestamps.departed)} <i class="fas fa-check"></i>`;
         
         enableEndingStage();
     }
@@ -346,7 +346,7 @@ function restoreLoggerUI() {
         const btn = document.getElementById('btnDropped');
         btn.className = "btn btn-success";
         btn.disabled = true;
-        btn.innerHTML = btn.innerHTML.replace(/<i class="fas fa-flag-checkered"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${formatTime12hr(timestamps.dropped)}</span> <i class="fas fa-check"></i>`;
+        btn.innerHTML = `<i class="fas fa-flag-checkered"></i> ${formatTime12hr(timestamps.dropped)} <i class="fas fa-check"></i>`;
         
         document.getElementById('saveSection').classList.remove('hidden');
     }
@@ -666,7 +666,16 @@ actionBtns.forEach((id, index) => {
             const time12 = formatTime12hr(time24);
             this.className = "btn btn-success";
             this.disabled = true;
-            this.innerHTML = this.innerHTML.replace(/<i class="fas fa-stopwatch"><\/i>|<i class="fas fa-ticket-alt"><\/i>|<i class="fas fa-bus"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
+            
+            // Set innerHTML directly based on button type
+            if (id === 'btnArrived') {
+                this.innerHTML = `<i class="fas fa-stopwatch"></i> ${time12} <i class="fas fa-check"></i>`;
+            } else if (id === 'btnBoarded') {
+                this.innerHTML = `<i class="fas fa-ticket-alt"></i> ${time12} <i class="fas fa-check"></i>`;
+            } else if (id === 'btnDeparted') {
+                this.innerHTML = `<i class="fas fa-bus"></i> ${time12} <i class="fas fa-check"></i>`;
+            }
+            
             if(index < actionBtns.length - 1) {
                 const next = document.getElementById(actionBtns[index+1]);
                 next.disabled = false;
@@ -704,7 +713,7 @@ document.getElementById('btnDropped').onclick = function() {
     const time12 = formatTime12hr(time24);
     this.className = "btn btn-success";
     this.disabled = true;
-    this.innerHTML = this.innerHTML.replace(/<i class="fas fa-flag-checkered"><\/i>/, '') + ` <span style="font-size:0.85rem;opacity:0.8">${time12}</span> <i class="fas fa-check"></i>`;
+    this.innerHTML = `<i class="fas fa-flag-checkered"></i> ${time12} <i class="fas fa-check"></i>`;
     document.getElementById('saveSection').classList.remove('hidden');
     // Save state to localStorage for persistence
     saveLoggerState();
