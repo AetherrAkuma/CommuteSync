@@ -231,18 +231,18 @@ input:focus, select:focus { border-color: var(--primary); background: rgba(15, 2
     transform: translateX(-50%);
     width: auto;
     max-width: calc(100% - 40px);
-    background: rgba(30, 30, 30, 0.85);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
+    background: rgba(20, 20, 20, 0.6);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
     display: flex;
     justify-content: center;
-    gap: 8px;
-    padding: 8px 12px;
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 6px;
+    padding: 8px 16px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
     border-radius: 50px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     z-index: 1000;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Hide nav bar when login modal is visible */
@@ -293,8 +293,20 @@ body:not(.logged-in) .nav-bar {
 .view-section.active { display: block; animation: slideUp 0.5s forwards; }
 .hidden { display: none !important; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; overflow-x: auto; display: block; }
-.data-table td, .data-table th { padding: 12px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); white-space: nowrap; }
+.data-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    font-size: 0.85rem; 
+    overflow-x: auto;
+    margin: 0 auto;
+    max-width: 100%;
+}
+.data-table td, .data-table th { 
+    padding: 12px 8px; 
+    border-bottom: 1px solid rgba(255,255,255,0.05); 
+    text-align: center;
+}
+.data-table th { font-weight: 600; color: var(--text-muted); }
 
 /* Responsive button sizing */
 .btn {

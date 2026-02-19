@@ -439,11 +439,24 @@ async function loadRoutes() {
             schedSelect.innerHTML += opt;
         });
 
+        // Restore previously selected route from localStorage
+        const savedRouteId = localStorage.getItem('commutesync_selected_route');
+        if (savedRouteId) {
+            logSelect.value = savedRouteId;
+            if (logSelect.value) {
+                const opt = logSelect.options[logSelect.selectedIndex];
+                document.getElementById('routeDetails').innerText = `${opt.dataset.origin} ➔ ${opt.dataset.dest}`;
+                setLoggerMode(opt.dataset.mode);
+            }
+        }
+
         logSelect.onchange = () => {
             const opt = logSelect.options[logSelect.selectedIndex];
             if (opt.value) {
                 document.getElementById('routeDetails').innerText = `${opt.dataset.origin} ➔ ${opt.dataset.dest}`;
                 setLoggerMode(opt.dataset.mode);
+                // Save selected route to localStorage
+                localStorage.setItem('commutesync_selected_route', opt.value);
             }
             // Update manual logger inputs when route changes
             updateManualLoggerInputs();
