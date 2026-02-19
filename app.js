@@ -264,19 +264,49 @@ async function clearLoggerState() {
 }
 
 async function resetLogger() {
-    if (!confirm("Reset logger? This will clear all recorded times.")) return;
+    // Use modal instead of confirm()
+    const modal = document.getElementById('feedbackModal');
+    const title = document.getElementById('feedbackTitle');
+    const message = document.getElementById('feedbackMessage');
+    const icon = document.getElementById('feedbackIcon');
+    const btn = document.getElementById('feedbackBtn');
     
-    tripData = { timestamps: {} };
-    missedCycles = 0;
+    title.innerText = 'Reset Logger?';
+    title.style.color = 'var(--apple-orange)';
+    message.innerText = 'This will clear all recorded times.';
+    icon.innerHTML = '<i class="fas fa-redo" style="font-size:3rem; color:var(--apple-orange);"></i>';
     
-    // Clear both localStorage and server
-    await clearLoggerState();
+    btn.innerText = 'Reset';
+    btn.style.background = 'linear-gradient(135deg, var(--apple-orange), #cc7a00)';
+    btn.onclick = async () => {
+        modal.classList.add('hidden');
+        
+        tripData = { timestamps: {} };
+        missedCycles = 0;
+        
+        // Clear both localStorage and server
+        await clearLoggerState();
+        
+        // Reset UI
+        resetLoggerUI();
+        
+        document.getElementById('logStatus').innerText = 'Logger reset - Ready';
+        showFeedbackModal(true, 'Logger has been reset', '');
+    };
     
-    // Reset UI
-    resetLoggerUI();
+    // Add cancel button
+    let cancelBtn = document.getElementById('resetCancelBtn');
+    if (!cancelBtn) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'resetCancelBtn';
+        cancelBtn.className = 'btn btn-outline';
+        cancelBtn.style.marginTop = '12px';
+        cancelBtn.innerText = 'Cancel';
+        btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
+    }
+    cancelBtn.onclick = () => modal.classList.add('hidden');
     
-    document.getElementById('logStatus').innerText = 'Logger reset - Ready';
-    showFeedbackModal(true, 'Logger has been reset', '');
+    modal.classList.remove('hidden');
 }
 
 function restoreLoggerUI() {
@@ -1012,9 +1042,24 @@ window.resetLogger = resetLogger;
 window.adjustCycles = (a) => { missedCycles = Math.max(0, missedCycles + a); document.getElementById('cycleCount').innerText = missedCycles; saveLoggerState(); };
 window.calculatePrediction = calculatePrediction;
 window.addRouteToChain = addRouteToChain;
+let isManualMode = false;
 window.toggleManualMode = () => {
-    document.getElementById('liveLoggerUI').classList.toggle('hidden');
-    document.getElementById('manualLoggerUI').classList.toggle('hidden');
+    isManualMode = !isManualMode;
+    const manualBtn = document.querySelector('#view-log .btn-outline');
+    
+    if (isManualMode) {
+        document.getElementById('liveLoggerUI').classList.add('hidden');
+        document.getElementById('manualLoggerUI').classList.remove('hidden');
+        if (manualBtn) {
+            manualBtn.innerHTML = '<i class="fas fa-stopwatch"></i> Smart';
+        }
+    } else {
+        document.getElementById('liveLoggerUI').classList.remove('hidden');
+        document.getElementById('manualLoggerUI').classList.add('hidden');
+        if (manualBtn) {
+            manualBtn.innerHTML = '<i class="fas fa-edit"></i> Manual';
+        }
+    }
     
     updateManualLoggerInputs();
 };
@@ -1180,11 +1225,44 @@ document.addEventListener('DOMContentLoaded', () => {
     checkLoginStatus();
     // Load logger state from localStorage for persistence
     loadLoggerState();
+    // Start status checker
+    checkSystemStatus();
     setInterval(() => {
         const clock = document.getElementById('mainClock');
         if(clock) clock.innerText = new Date().toLocaleTimeString([], { hour12: true });
     }, 1000);
+    // Check status every 30 seconds
+    setInterval(checkSystemStatus, 30000);
 });
+
+// --- SYSTEM STATUS CHECKER ---
+async function checkSystemStatus() {
+    const indicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
+    
+    if (!indicator || !statusText) return;
+    
+    let backendOk = false;
+    
+    // Check backend status by hitting /routes endpoint
+    try {
+        const res = await fetch(`${API_URL}/routes`, { method: 'GET' });
+        backendOk = res.ok && res.status === 200;
+    } catch (e) {
+        backendOk = false;
+    }
+    
+    // Update UI based on status
+    if (backendOk) {
+        indicator.style.background = 'var(--apple-green)';
+        indicator.style.boxShadow = '0 0 8px var(--apple-green)';
+        statusText.innerText = 'Backend online';
+    } else {
+        indicator.style.background = 'var(--apple-orange)';
+        indicator.style.boxShadow = '0 0 8px var(--apple-orange)';
+        statusText.innerText = 'Backend offline';
+    }
+}
 
 // ==========================================
 // AUTH FUNCTIONS
