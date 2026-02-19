@@ -506,6 +506,8 @@ app.post('/api/logger-session', async (req, res) => {
         const { route_id, timestamps, missed_cycles } = req.body;
         const userId = getUserId(req);
         
+        console.log("Logger session request:", { route_id, timestamps, missed_cycles, userId });
+        
         if (!userId) {
             return res.status(400).json({ error: "User ID required" });
         }
@@ -518,7 +520,12 @@ app.post('/api/logger-session', async (req, res) => {
             .eq('user_id', userId)
             .limit(1);
         
-        const { data: existing } = await existingQuery;
+        const { data: existing, error: fetchError } = await existingQuery;
+        
+        if (fetchError) {
+            console.error("Fetch existing session error:", fetchError);
+            return res.status(500).json({ error: "Failed to fetch session: " + fetchError.message });
+        }
         
         if (existing && existing.length > 0) {
             // Update existing session
@@ -534,26 +541,39 @@ app.post('/api/logger-session', async (req, res) => {
                 .select()
                 .single();
             
-            if (error) throw error;
+            if (error) {
+                console.error("Update session error:", error);
+                return res.status(500).json({ error: "Failed to update session: " + error.message });
+            }
             res.json(data);
         } else {
             // Create new session
+            const insertData = {
+                user_id: userId,
+                route_id,
+                timestamps,
+                missed_cycles,
+                status: 'in_progress'
+            };
+            
+            console.log("Creating new session with:", insertData);
+            
             const { data, error } = await supabase
                 .from('logger_sessions')
-                .insert([{
-                    user_id: userId,
-                    route_id,
-                    timestamps,
-                    missed_cycles,
-                    status: 'in_progress'
-                }])
+                .insert([insertData])
                 .select()
                 .single();
             
-            if (error) throw error;
+            if (error) {
+                console.error("Insert session error:", error);
+                return res.status(500).json({ error: "Failed to create session: " + error.message });
+            }
             res.status(201).json(data);
         }
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Logger session exception:", e);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 // DELETE clear session (after save or manual reset)
