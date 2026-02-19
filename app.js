@@ -58,6 +58,38 @@ async function saveLoggerState(showFeedback = false) {
     }
 }
 
+// Show "server waking up" feedback
+let serverWakingUp = false;
+
+function showServerWakingModal() {
+    if (serverWakingUp) return;
+    serverWakingUp = true;
+    
+    const modal = document.getElementById('feedbackModal');
+    const title = document.getElementById('feedbackTitle');
+    const message = document.getElementById('feedbackMessage');
+    const icon = document.getElementById('feedbackIcon');
+    const btn = document.getElementById('feedbackBtn');
+    
+    title.innerText = 'Server Waking Up';
+    title.style.color = 'var(--apple-orange)';
+    message.innerText = 'Please wait while the server starts...';
+    icon.innerHTML = '<i class="fas fa-hourglass-half" style="font-size:3rem; color:var(--apple-orange); animation: spin 2s linear infinite;"></i>';
+    btn.innerText = 'OK';
+    btn.onclick = () => {
+        modal.classList.add('hidden');
+        serverWakingUp = false;
+    };
+    btn.style.background = 'linear-gradient(135deg, var(--apple-orange), #cc7a00)';
+    
+    modal.classList.remove('hidden');
+}
+
+// Add spin animation
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+
 // Sync to server with retry logic
 async function syncToServer(state, maxRetries = 3, initialDelay = 1000) {
     let lastError = null;
@@ -76,12 +108,22 @@ async function syncToServer(state, maxRetries = 3, initialDelay = 1000) {
             
             if (response.ok) {
                 console.log("Successfully synced to server");
+                serverWakingUp = false;
                 return true;
+            }
+            
+            // Check if server is starting (503 or connection error)
+            if (response.status === 503 || lastError?.message?.includes('Failed to fetch')) {
+                showServerWakingModal();
             }
             
             lastError = new Error(`Server returned ${response.status}`);
         } catch (e) {
             lastError = e;
+            // Show server waking modal on first connection failure
+            if (attempt === 0) {
+                showServerWakingModal();
+            }
             console.warn(`Sync attempt ${attempt + 1} failed:`, e.message);
         }
         
@@ -1181,8 +1223,23 @@ function checkLoginStatus() {
 
 window.showLoginModal = function() {
     if (currentUserId) {
-        // Already logged in - logout
-        if (confirm('Logout?')) {
+        // Already logged in - logout using modal
+        const modal = document.getElementById('feedbackModal');
+        const title = document.getElementById('feedbackTitle');
+        const message = document.getElementById('feedbackMessage');
+        const icon = document.getElementById('feedbackIcon');
+        const btn = document.getElementById('feedbackBtn');
+        
+        title.innerText = 'Logout';
+        title.style.color = 'var(--apple-red)';
+        message.innerText = 'Are you sure you want to logout?';
+        icon.innerHTML = '<i class="fas fa-sign-out-alt" style="font-size:3rem; color:var(--apple-red);"></i>';
+        
+        // Create cancel and logout buttons
+        btn.innerText = 'Logout';
+        btn.style.background = 'linear-gradient(135deg, var(--apple-red), #cc3630)';
+        btn.onclick = () => {
+            modal.classList.add('hidden');
             localStorage.removeItem('commutesync_user_id');
             localStorage.removeItem('commutesync_username');
             localStorage.removeItem('commutesync_email');
@@ -1191,7 +1248,21 @@ window.showLoginModal = function() {
             currentEmail = null;
             checkLoginStatus();
             location.reload();
+        };
+        
+        // Add cancel button dynamically
+        let cancelBtn = document.getElementById('cancelLogoutBtn');
+        if (!cancelBtn) {
+            cancelBtn = document.createElement('button');
+            cancelBtn.id = 'cancelLogoutBtn';
+            cancelBtn.className = 'btn btn-outline';
+            cancelBtn.style.marginTop = '12px';
+            cancelBtn.innerText = 'Cancel';
+            btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
         }
+        cancelBtn.onclick = () => modal.classList.add('hidden');
+        
+        modal.classList.remove('hidden');
     } else {
         document.getElementById('loginModal').classList.remove('hidden');
         document.getElementById('loginError').innerText = '';
