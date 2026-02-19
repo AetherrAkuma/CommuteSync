@@ -26,34 +26,127 @@ let currentMode = "Vehicle";
 
 // --- LOCALSTORAGE PERSISTENCE FOR LOGGER ---
 const LOGGER_STORAGE_KEY = 'commutesync_logger_data';
+const PENDING_SYNC_KEY = 'commutesync_pending_sync';
 
-// Save to both localStorage and server
-async function saveLoggerState() {
+// Save to both localStorage and server with retry logic
+async function saveLoggerState(showFeedback = false) {
     // Save to localStorage as backup
     const state = {
         timestamps: tripData.timestamps,
         missedCycles: missedCycles,
-        savedAt: new Date().toISOString()
+        savedAt: new Date().toISOString(),
+        routeId: document.getElementById('logRouteSelect')?.value
     };
     localStorage.setItem(LOGGER_STORAGE_KEY, JSON.stringify(state));
     
     // Save to server if user is logged in
     if (currentUserId) {
+        const success = await syncToServer(state, 3, 1000); // 3 retries, 1s initial delay
+        if (showFeedback) {
+            showFeedbackModal(success, 'Logger saved to server', 'Failed to sync to server (saved locally)');
+        }
+    } else {
+        // Save pending sync for when user logs in
+        const pending = JSON.parse(localStorage.getItem(PENDING_SYNC_KEY) || '[]');
+        pending.push({ ...state, timestamp: Date.now() });
+        localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pending));
+        if (showFeedback) {
+            showFeedbackModal(true, 'Logger saved locally', 'Will sync when you login');
+        }
+    }
+}
+
+// Sync to server with retry logic
+async function syncToServer(state, maxRetries = 3, initialDelay = 1000) {
+    let lastError = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            const routeId = document.getElementById('logRouteSelect')?.value;
-            await fetch(`${API_URL}/logger-session?user_id=${currentUserId}`, {
+            const response = await fetch(`${API_URL}/logger-session?user_id=${currentUserId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    route_id: routeId,
-                    timestamps: tripData.timestamps,
-                    missed_cycles: missedCycles
+                    route_id: state.routeId,
+                    timestamps: state.timestamps,
+                    missed_cycles: state.missedCycles
                 })
             });
+            
+            if (response.ok) {
+                console.log("Successfully synced to server");
+                return true;
+            }
+            
+            lastError = new Error(`Server returned ${response.status}`);
         } catch (e) {
-            console.warn("Failed to save to server, using local backup:", e);
+            lastError = e;
+            console.warn(`Sync attempt ${attempt + 1} failed:`, e.message);
+        }
+        
+        // Exponential backoff before retry
+        if (attempt < maxRetries - 1) {
+            const delay = initialDelay * Math.pow(2, attempt);
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
     }
+    
+    console.error("All sync attempts failed:", lastError);
+    return false;
+}
+
+// Sync any pending data when user logs in
+async function syncPendingData() {
+    const pending = JSON.parse(localStorage.getItem(PENDING_SYNC_KEY) || '[]');
+    if (pending.length === 0) return;
+    
+    console.log("Syncing pending data:", pending.length, "items");
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const item of pending) {
+        const success = await syncToServer(item, 3, 1000);
+        if (success) {
+            successCount++;
+        } else {
+            failCount++;
+        }
+    }
+    
+    // Keep failed items for next sync
+    const failedItems = pending.slice(-failCount);
+    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(failedItems));
+    
+    console.log(`Pending sync complete: ${successCount} success, ${failCount} failed`);
+}
+
+// Show feedback modal (iOS-friendly)
+function showFeedbackModal(success, successMsg, failMsg) {
+    const modal = document.getElementById('feedbackModal');
+    const title = document.getElementById('feedbackTitle');
+    const message = document.getElementById('feedbackMessage');
+    const icon = document.getElementById('feedbackIcon');
+    const btn = document.getElementById('feedbackBtn');
+    
+    if (success) {
+        title.innerText = 'Success';
+        title.style.color = 'var(--accent)';
+        message.innerText = successMsg;
+        icon.innerHTML = '<i class="fas fa-check-circle" style="font-size:3rem; color:var(--accent);"></i>';
+        btn.innerText = 'OK';
+        btn.onclick = () => modal.classList.add('hidden');
+        btn.style.background = 'var(--accent-gradient)';
+    } else {
+        title.innerText = 'Sync Issue';
+        title.style.color = 'var(--danger)';
+        message.innerText = failMsg;
+        icon.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:3rem; color:var(--danger);"></i>';
+        btn.innerText = 'OK';
+        btn.onclick = () => modal.classList.add('hidden');
+        btn.style.background = 'var(--primary-gradient)';
+    }
+    
+    modal.classList.remove('hidden');
 }
 
 // Load from server first, then localStorage
@@ -139,6 +232,7 @@ async function resetLogger() {
     resetLoggerUI();
     
     document.getElementById('logStatus').innerText = 'Logger reset - Ready';
+    showFeedbackModal(true, 'Logger has been reset', '');
 }
 
 function restoreLoggerUI() {
@@ -1139,6 +1233,10 @@ window.doLogin = async function() {
         
         checkLoginStatus();
         closeLoginModal();
+        
+        // Sync any pending data after login
+        await syncPendingData();
+        
         location.reload();
     } catch (e) {
         errorEl.innerText = 'Connection error';
