@@ -241,6 +241,11 @@ input:focus, select:focus { border-color: var(--primary); background: rgba(15, 2
     z-index: 1000;
 }
 
+/* Hide nav bar when login modal is visible */
+body:not(.logged-in) .nav-bar {
+    display: none;
+}
+
 .nav-item {
     background: none;
     border: none;

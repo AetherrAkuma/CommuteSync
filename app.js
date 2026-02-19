@@ -1059,10 +1059,14 @@ function checkLoginStatus() {
         document.getElementById('loginBtnText').innerText = currentUsername || 'Logout';
         // Hide login modal when logged in
         document.getElementById('loginModal').classList.add('hidden');
+        // Add logged-in class to body to show nav bar
+        document.body.classList.add('logged-in');
     } else {
         document.getElementById('loginBtnText').innerText = 'Login';
         // Show login modal when not logged in
         document.getElementById('loginModal').classList.remove('hidden');
+        // Remove logged-in class to hide nav bar
+        document.body.classList.remove('logged-in');
     }
 }
 
