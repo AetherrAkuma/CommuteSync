@@ -723,6 +723,11 @@ async function calculatePrediction() {
             
             const delay = (leg.timelines.worst.wait + leg.timelines.worst.travel) - (leg.timelines.safe.wait + leg.timelines.safe.travel);
             
+            // Format arrival times to 12-hour format
+            const arrivalBest = leg.arrival_time?.best ? formatTime12hr(leg.arrival_time.best) : '';
+            const arrivalSafe = leg.arrival_time?.safe ? formatTime12hr(leg.arrival_time.safe) : '';
+            const arrivalWorst = leg.arrival_time?.worst ? formatTime12hr(leg.arrival_time.worst) : '';
+            
             return `
             <div class="itinerary-step">
                 <div class="itinerary-dot mode-aware ${modeInfo.class}">
@@ -743,6 +748,12 @@ async function calculatePrediction() {
                         <span>${leg.timelines.safe.travel}m</span>
                     </div>
                 </div>
+                ${(arrivalBest || arrivalSafe || arrivalWorst) ? `
+                <div class="step-arrival" style="margin-top:10px; padding:8px 12px; background:rgba(59,130,246,0.1); border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:0.7rem; color:var(--text-muted);"><i class="fas fa-clock"></i> Arrive at</span>
+                    <span style="font-weight:800; color:var(--primary);">${arrivalSafe}</span>
+                </div>
+                ` : ''}
                 ${delay > 0 ? `<div class="risk-alert"><i class="fas fa-exclamation-triangle"></i> Variance Risk: +${delay}m</div>` : ''}
             </div>`;
         }).join('');

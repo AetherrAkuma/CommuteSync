@@ -258,6 +258,11 @@ app.post('/api/predict', async (req, res) => {
                 name: routeData?.name || 'Unknown',
                 origin: routeData?.origin || '',
                 destination: routeData?.destination || '',
+                arrival_time: {
+                    best: clocks.best.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}),
+                    safe: clocks.safe.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}),
+                    worst: clocks.worst.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false})
+                },
                 timelines: { 
                     safe: {wait: Math.round(wS), travel: Math.round(tS)}, 
                     worst: {wait: Math.round(wW), travel: Math.round(tW)} 
