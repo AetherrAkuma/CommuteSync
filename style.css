@@ -352,7 +352,7 @@ input::placeholder {
     background: rgba(30, 30, 30, 0.75);
     backdrop-filter: blur(50px) saturate(200%);
     -webkit-backdrop-filter: blur(50px) saturate(200%);
-    display: flex;
+    display: none;
     justify-content: center;
     gap: 4px;
     padding: 6px;
@@ -363,8 +363,8 @@ input::placeholder {
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-body:not(.logged-in) .nav-bar {
-    display: none;
+body.logged-in .nav-bar {
+    display: flex;
 }
 
 .nav-item {

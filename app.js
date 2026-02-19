@@ -1284,18 +1284,29 @@ async function apiFetch(endpoint, options = {}) {
 }
 
 function checkLoginStatus() {
+    const mainContent = document.getElementById('mainContent');
+    const navBar = document.querySelector('.nav-bar');
+    
     if (currentUserId) {
         document.getElementById('loginBtnText').innerText = currentUsername || 'Logout';
         // Hide login modal when logged in
         document.getElementById('loginModal').classList.add('hidden');
         // Add logged-in class to body to show nav bar
         document.body.classList.add('logged-in');
+        // Show main content
+        if (mainContent) mainContent.classList.remove('hidden');
+        // Show nav bar
+        if (navBar) navBar.style.display = 'flex';
     } else {
         document.getElementById('loginBtnText').innerText = 'Login';
         // Show login modal when not logged in
         document.getElementById('loginModal').classList.remove('hidden');
         // Remove logged-in class to hide nav bar
         document.body.classList.remove('logged-in');
+        // Hide main content
+        if (mainContent) mainContent.classList.add('hidden');
+        // Hide nav bar
+        if (navBar) navBar.style.display = 'none';
     }
 }
 
