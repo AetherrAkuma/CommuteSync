@@ -477,39 +477,51 @@ app.get('/api/logger-session', async (req, res) => {
     try {
         const userId = getUserId(req);
         
+        if (!userId) {
+            return res.status(400).json({ error: "User ID required" });
+        }
+        
         let query = supabase
             .from('logger_sessions')
             .select('*')
             .eq('status', 'in_progress')
+            .eq('user_id', userId)
             .order('created_at', { ascending: false })
             .limit(1);
         
-        if (userId) {
-            query = query.eq('user_id', userId);
-        }
-        
         const { data, error } = await query;
         
-        if (error) throw error;
+        if (error) {
+            console.error("Get logger session error:", error);
+            return res.status(500).json({ error: "Failed to get session: " + error.message });
+        }
         
         if (data && data.length > 0) {
             res.json(data[0]);
         } else {
             res.json(null);
         }
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Get logger session exception:", e);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 // POST create or update session
 app.post('/api/logger-session', async (req, res) => {
     try {
-        const { route_id, timestamps, missed_cycles } = req.body;
+        let { route_id, timestamps, missed_cycles } = req.body;
         const userId = getUserId(req);
         
         console.log("Logger session request:", { route_id, timestamps, missed_cycles, userId });
         
         if (!userId) {
             return res.status(400).json({ error: "User ID required" });
+        }
+        
+        // Handle empty/null route_id - convert to null for UUID column
+        if (!route_id || route_id === '') {
+            route_id = null;
         }
         
         // Check for existing in-progress session
@@ -529,14 +541,18 @@ app.post('/api/logger-session', async (req, res) => {
         
         if (existing && existing.length > 0) {
             // Update existing session
+            const updateData = {
+                timestamps: timestamps || {},
+                missed_cycles: missed_cycles || 0,
+                updated_at: new Date().toISOString()
+            };
+            if (route_id) {
+                updateData.route_id = route_id;
+            }
+            
             const { data, error } = await supabase
                 .from('logger_sessions')
-                .update({
-                    route_id,
-                    timestamps,
-                    missed_cycles,
-                    updated_at: new Date().toISOString()
-                })
+                .update(updateData)
                 .eq('id', existing[0].id)
                 .select()
                 .single();
@@ -550,11 +566,14 @@ app.post('/api/logger-session', async (req, res) => {
             // Create new session
             const insertData = {
                 user_id: userId,
-                route_id,
-                timestamps,
-                missed_cycles,
+                timestamps: timestamps || {},
+                missed_cycles: missed_cycles || 0,
                 status: 'in_progress'
             };
+            
+            if (route_id) {
+                insertData.route_id = route_id;
+            }
             
             console.log("Creating new session with:", insertData);
             
