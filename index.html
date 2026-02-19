@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CommuteSync Pro</title>
+    <title>CommuteSync</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/simple-statistics@7.8.3/dist/simple-statistics.min.js"></script>
 </head>
@@ -16,26 +15,22 @@
         
     <header>
         <h1>CommuteSync</h1>
-        <div style="display: flex; gap: 8px;">
-            <span class="status-pill hidden" id="syncStatus" style="background:var(--primary); color:white; border:none;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="status-pill hidden" id="syncStatus">
                 <i class="fas fa-cloud-upload-alt"></i> Syncing
             </span>
             <span class="status-pill" id="connectionStatus">
                 <i class="fas fa-wifi"></i> Online
             </span>
-            <button id="loginBtn" class="btn small btn-outline" onclick="window.showLoginModal()" style="width:auto; margin-left:8px;">
-                <i class="fas fa-user"></i> <span id="loginBtnText">Login</span>
-            </button>
         </div>
     </header>
 
     <!-- Feedback Modal -->
     <div id="feedbackModal" class="modal hidden">
         <div class="modal-content" style="text-align:center;">
-            <div id="feedbackIcon" style="margin-bottom:20px;">
-            </div>
-            <h2 id="feedbackTitle" style="margin-bottom:10px;">Success</h2>
-            <p id="feedbackMessage" style="color:var(--text-muted); margin-bottom:25px; font-size:0.9rem;">Message here</p>
+            <div id="feedbackIcon" style="margin-bottom:16px;"></div>
+            <h2 id="feedbackTitle" style="margin-bottom:8px; font-size:1.25rem;">Success</h2>
+            <p id="feedbackMessage" style="color:var(--text-secondary); margin-bottom:20px; font-size:0.9rem;">Message here</p>
             <button id="feedbackBtn" class="btn btn-primary">OK</button>
         </div>
     </div>
@@ -44,18 +39,18 @@
     <div id="loginModal" class="modal">
         <div class="modal-content" style="text-align:center;">
             <div style="margin-bottom:20px;">
-                <i class="fas fa-route" style="font-size:3rem; color:var(--primary);"></i>
+                <i class="fas fa-route" style="font-size:2.5rem; color:var(--apple-blue);"></i>
             </div>
-            <h2 style="margin-bottom:5px;">CommuteSync</h2>
-            <p style="color:var(--text-muted); margin-bottom:25px; font-size:0.9rem;">Sign in to access your data</p>
+            <h2 style="margin-bottom:4px; font-size:1.5rem; font-weight:700;">CommuteSync</h2>
+            <p style="color:var(--text-secondary); margin-bottom:24px; font-size:0.875rem;">Sign in to access your data</p>
             
-            <div style="text-align:left; margin-bottom:15px;">
-                <label style="margin-bottom:5px;">Email</label>
+            <div style="text-align:left; margin-bottom:16px;">
+                <label style="margin-bottom:6px;">Email</label>
                 <input type="email" id="loginEmail" placeholder="your@email.com">
             </div>
             
             <div style="text-align:left; margin-bottom:20px;">
-                <label style="margin-bottom:5px;">Password</label>
+                <label style="margin-bottom:6px;">Password</label>
                 <input type="password" id="loginPassword" placeholder="••••••••">
             </div>
             
@@ -63,17 +58,18 @@
                 <i class="fas fa-sign-in-alt"></i> Sign In
             </button>
             
-            <p id="loginError" style="color:var(--danger); margin-top:15px; text-align:center; font-size:0.85rem;"></p>
+            <p id="loginError" style="color:var(--apple-red); margin-top:16px; text-align:center; font-size:0.8rem;"></p>
         </div>
     </div>
 
+        <!-- Logger View -->
         <section id="view-log" class="view-section active">
             
-            <div style="text-align: right; margin-bottom: 15px; display: flex; gap: 8px; justify-content: flex-end;">
-                <button class="btn small btn-outline" onclick="window.toggleManualMode()" style="width: auto;">
-                    <i class="fas fa-edit"></i> Manual Backfill
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 12px;">
+                <button class="btn small btn-outline" onclick="window.toggleManualMode()">
+                    <i class="fas fa-edit"></i> Manual
                 </button>
-                <button class="btn small btn-outline" onclick="window.resetLogger()" style="width: auto; border-color: var(--danger); color: var(--danger);">
+                <button class="btn small btn-outline" onclick="window.resetLogger()" style="border-color: var(--apple-red); color: var(--apple-red);">
                     <i class="fas fa-redo"></i> Reset
                 </button>
             </div>
@@ -83,61 +79,75 @@
                 <select id="logRouteSelect">
                     <option value="">Loading routes...</option>
                 </select>
-                <div id="routeDetails" class="text-muted" style="margin-top:10px; text-align:center; font-size:0.9rem;"></div>
+                <div id="routeDetails" class="text-muted" style="margin-top:12px; text-align:center; font-size:0.875rem;"></div>
             </div>
 
             <div class="timer-display" id="mainClock">00:00:00</div>
 
+            <!-- Live Logger UI -->
             <div id="liveLoggerUI">
                 <div class="card">
                     <label>Sequence Control</label>
                     <div id="vehicleControls">
-                        <button id="btnArrived" class="btn btn-primary"><i class="fas fa-stopwatch"></i> I'm at the Stop</button>
-                        <button id="btnBoarded" class="btn btn-outline" disabled><i class="fas fa-ticket-alt"></i> Boarding</button>
-                        <button id="btnDeparted" class="btn btn-outline" disabled><i class="fas fa-bus"></i> Departing</button>
+                        <button id="btnArrived" class="btn btn-primary">
+                            <i class="fas fa-stopwatch"></i> I'm at the Stop
+                        </button>
+                        <button id="btnBoarded" class="btn btn-outline" disabled>
+                            <i class="fas fa-ticket-alt"></i> Boarding
+                        </button>
+                        <button id="btnDeparted" class="btn btn-outline" disabled>
+                            <i class="fas fa-bus"></i> Departing
+                        </button>
                     </div>
 
                     <div id="walkingControls" class="hidden">
-                        <button id="btnStartWalk" class="btn btn-success"><i class="fas fa-walking"></i> Start Walking</button>
+                        <button id="btnStartWalk" class="btn btn-success">
+                            <i class="fas fa-walking"></i> Start Walking
+                        </button>
                     </div>
 
-                    <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                        <button id="btnDropped" class="btn btn-outline" disabled><i class="fas fa-flag-checkered"></i> Drop Off</button>
+                    <div style="margin-top: 16px; border-top: 1px solid var(--glass-border); padding-top: 16px;">
+                        <button id="btnDropped" class="btn btn-outline" disabled>
+                            <i class="fas fa-flag-checkered"></i> Drop Off
+                        </button>
                     </div>
                 </div>
 
-                <div id="saveSection" class="card hidden" style="border-color: var(--accent);">
+                <div id="saveSection" class="card hidden" style="border-color: var(--apple-green);">
                     <div id="vehicleCycleCounter">
-                        <label>Missed Vehicles (Full/Cut-off)</label>
-                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); border-radius:12px; padding:10px; margin-bottom:15px;">
-                            <button class="btn small btn-outline" onclick="window.adjustCycles(-1)" style="margin:0; width:45px;">-</button>
-                            <span id="cycleCount" style="font-size:1.5rem; font-weight:800;">0</span>
-                            <button class="btn small btn-outline" onclick="window.adjustCycles(1)" style="margin:0; width:45px;">+</button>
+                        <label>Missed Vehicles</label>
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-tertiary); border-radius:12px; padding:12px; margin-bottom:16px;">
+                            <button class="btn small btn-outline" onclick="window.adjustCycles(-1)" style="margin:0; width:48px;">−</button>
+                            <span id="cycleCount" style="font-size:1.75rem; font-weight:700;">0</span>
+                            <button class="btn small btn-outline" onclick="window.adjustCycles(1)" style="margin:0; width:48px;">+</button>
                         </div>
                     </div>
-                    <button id="btnSaveLog" class="btn btn-success"><i class="fas fa-save"></i> Save Trip Data</button>
+                    <button id="btnSaveLog" class="btn btn-success">
+                        <i class="fas fa-save"></i> Save Trip Data
+                    </button>
                 </div>
             </div>
 
+            <!-- Manual Logger UI -->
             <div id="manualLoggerUI" class="hidden">
-                <div class="card" style="border: 1px solid var(--primary);">
-                    <h3><i class="fas fa-pen-nib"></i> Backfill Log</h3>
+                <div class="card" style="border: 1px solid var(--apple-blue);">
+                    <h3 style="font-size:1.1rem; font-weight:600; margin-bottom:16px;">
+                        <i class="fas fa-pen-nib" style="margin-right:8px;"></i> Backfill Log
+                    </h3>
                     <label>Date</label>
-                    <input type="date" id="manualDate" style="margin-bottom:15px">
+                    <input type="date" id="manualDate" style="margin-bottom:16px">
 
-                    <!-- Vehicle mode inputs -->
                     <div id="manualVehicleInputs">
                         <div class="row">
                             <div><label>Arrived</label><input type="time" id="manualArrived"></div>
                             <div><label>Boarded</label><input type="time" id="manualBoarded"></div>
                         </div>
-                        <div class="row" style="margin-top:10px">
+                        <div class="row" style="margin-top:12px">
                             <div><label>Departed</label><input type="time" id="manualDeparted"></div>
                             <div><label>Dropped</label><input type="time" id="manualDropped"></div>
                         </div>
                     </div>
 
-                    <!-- Walking mode inputs (simplified) -->
                     <div id="manualWalkingInputs" class="hidden">
                         <div class="row">
                             <div><label>Started</label><input type="time" id="manualStarted"></div>
@@ -145,21 +155,22 @@
                         </div>
                     </div>
                     
-                    <div style="margin-top: 15px;">
-                        <label>Missed Vehicles Count</label>
+                    <div style="margin-top: 16px;">
+                        <label>Missed Vehicles</label>
                         <input type="number" id="manualCycles" value="0" min="0">
                     </div>
 
-                    <div style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="window.saveManualLog()" class="btn btn-success">Confirm</button>
-                        <button onclick="window.toggleManualMode()" class="btn btn-outline">Cancel</button>
+                    <div style="display:flex; gap:12px; margin-top:20px;">
+                        <button onclick="window.saveManualLog()" class="btn btn-success" style="flex:1;">Confirm</button>
+                        <button onclick="window.toggleManualMode()" class="btn btn-outline" style="flex:1;">Cancel</button>
                     </div>
                 </div>
             </div>
             
-            <div id="logStatus" style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top:10px;">Ready</div>
+            <div id="logStatus" style="text-align: center; color: var(--text-tertiary); font-size: 0.75rem; margin-top:12px;">Ready</div>
         </section>
 
+        <!-- Predict View -->
         <section id="view-predict" class="view-section">
             <div class="card">
                 <label><i class="fas fa-calendar"></i> Date</label>
@@ -176,11 +187,11 @@
                 <select id="presetSelect" onchange="window.loadPreset()">
                     <option value="">-- Select Preset --</option>
                 </select>
-                <div style="display:flex; gap:10px; margin-top:10px;">
+                <div style="display:flex; gap:10px; margin-top:12px;">
                     <button onclick="window.savePreset()" class="btn small btn-outline" style="flex:1">
                         <i class="fas fa-save"></i> Save
                     </button>
-                    <button onclick="window.deletePreset()" class="btn small btn-outline" style="flex:1; border-color: var(--danger);">
+                    <button onclick="window.deletePreset()" class="btn small btn-outline" style="flex:1; border-color: var(--apple-red);">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </div>
@@ -188,8 +199,8 @@
 
             <div class="card">
                 <label><i class="fas fa-link"></i> Journey Chain</label>
-                <div id="routeChainContainer"></div>
-                <button onclick="window.addRouteToChain()" class="btn small btn-outline" style="margin-top:10px">
+                <div id="routeChainContainer" style="margin-bottom:12px;"></div>
+                <button onclick="window.addRouteToChain()" class="btn small btn-outline">
                     <i class="fas fa-plus"></i> Add Stop
                 </button>
             </div>
@@ -198,17 +209,17 @@
                 <i class="fas fa-wand-magic-sparkles"></i> Predict Arrival
             </button>
 
-            <div id="predictionResult" class="hidden" style="margin-top:25px;">
+            <div id="predictionResult" class="hidden" style="margin-top:24px;">
                 <div class="scenario-grid">
-                    <div class="scenario-box" style="color:#10b981;">
+                    <div class="scenario-box" style="color:var(--apple-green);">
                         <div class="scenario-title">BEST</div>
                         <div id="timeBest" class="scenario-time">--:--</div>
                     </div>
                     <div class="scenario-box safe">
-                        <div class="scenario-title" style="color:var(--primary)">SAFE</div>
+                        <div class="scenario-title" style="color:var(--apple-blue)">SAFE</div>
                         <div id="timeSafe" class="scenario-time">--:--</div>
                     </div>
-                    <div class="scenario-box" style="color:#ef4444;">
+                    <div class="scenario-box" style="color:var(--apple-red);">
                         <div class="scenario-title">WORST</div>
                         <div id="timeWorst" class="scenario-time">--:--</div>
                     </div>
@@ -216,49 +227,55 @@
 
                 <div class="card">
                     <label><i class="fas fa-list-ul"></i> Itinerary Breakdown</label>
-                    <div id="predDetails" class="itinerary-track" style="margin-top:15px;"></div>
+                    <div id="predDetails" class="itinerary-track" style="margin-top:16px;"></div>
                 </div>
             </div>
         </section>
 
+        <!-- Analytics View -->
         <section id="view-analytics" class="view-section">
             <div class="card">
                 <label><i class="fas fa-chart-line"></i> Route Performance</label>
-                <div id="analyticsContainer" style="margin-top:15px;">
-                    <div style="text-align:center; color:var(--text-muted);">Loading analytics...</div>
+                <div id="analyticsContainer" style="margin-top:16px;">
+                    <div style="text-align:center; color:var(--text-secondary);">Loading analytics...</div>
                 </div>
             </div>
         </section>
 
+        <!-- Manage/Config View -->
         <section id="view-manage" class="view-section">
             
             <div class="card">
                 <label><i class="fas fa-calendar-alt"></i> Trip Distribution by Day</label>
-                <canvas id="dayChart" style="margin-top:10px;"></canvas>
+                <canvas id="dayChart" style="margin-top:12px;"></canvas>
             </div>
 
             <div class="card">
-                <h3><i class="fas fa-plus-circle"></i> Add Route</h3>
-                <input type="text" id="newRouteName" placeholder="Route Name" style="margin-bottom:10px">
-                <div class="row" style="margin-bottom:10px">
+                <h3 style="font-size:1rem; font-weight:600; margin-bottom:16px;">
+                    <i class="fas fa-plus-circle" style="margin-right:8px; color:var(--apple-green);"></i> Add Route
+                </h3>
+                <input type="text" id="newRouteName" placeholder="Route Name" style="margin-bottom:12px">
+                <div class="row" style="margin-bottom:12px">
                     <input type="text" id="newOrigin" placeholder="Origin">
                     <input type="text" id="newDest" placeholder="Destination">
                 </div>
-                <select id="newRouteMode" onchange="window.toggleCustomMode(this)" style="margin-bottom:10px">
+                <select id="newRouteMode" onchange="window.toggleCustomMode(this)" style="margin-bottom:12px">
                     <option value="QCBus">QCity Bus</option>
                     <option value="Jeep">Jeepney</option>
                     <option value="Tricycle">Tricycle</option>
                     <option value="Walking">Walking</option>
                     <option value="Custom">Custom Mode...</option>
                 </select>
-                <input type="text" id="customModeInput" placeholder="Enter Mode Name" class="hidden" style="margin-bottom:10px">
+                <input type="text" id="customModeInput" placeholder="Enter Mode Name" class="hidden" style="margin-bottom:12px">
                 <button onclick="window.createNewRoute()" class="btn btn-success">Save Route</button>
             </div>
 
             <div class="card">
-                <h3><i class="fas fa-clock"></i> Schedule Rules</h3>
-                <select id="scheduleRouteSelect" style="margin-bottom:10px"></select>
-                <div class="row" style="margin-bottom:10px">
+                <h3 style="font-size:1rem; font-weight:600; margin-bottom:16px;">
+                    <i class="fas fa-clock" style="margin-right:8px; color:var(--apple-orange);"></i> Schedule Rules
+                </h3>
+                <select id="scheduleRouteSelect" style="margin-bottom:12px"></select>
+                <div class="row" style="margin-bottom:12px">
                     <select id="schedDay">
                         <option value="Weekday">Mon-Fri</option>
                         <option value="Saturday">Sat</option>
@@ -266,7 +283,7 @@
                     </select>
                     <input type="number" id="schedInterval" placeholder="Interval (min)">
                 </div>
-                <div class="row" style="margin-bottom:10px">
+                <div class="row" style="margin-bottom:12px">
                     <input type="time" id="schedStart" value="06:00">
                     <input type="time" id="schedEnd" value="09:00">
                 </div>
@@ -274,28 +291,34 @@
             </div>
 
             <div class="card">
-                <h3><i class="fas fa-history"></i> Recent Logs</h3>
-                <div style="overflow-x:auto;">
-                    <table class="data-table" id="logsTable">
-                        <thead><tr><th>Date</th><th>Route</th><th>Wait</th><th>Travel</th></tr></thead>
-                        <tbody><tr><td colspan="4" style="text-align:center;">Loading logs...</td></tr></tbody>
-                    </table>
-                </div>
+                <h3 style="font-size:1rem; font-weight:600; margin-bottom:16px;">
+                    <i class="fas fa-history" style="margin-right:8px; color:var(--apple-blue);"></i> Recent Logs
+                </h3>
+                <table class="data-table" id="logsTable">
+                    <thead><tr><th>Date</th><th>Route</th><th>Wait</th><th>Travel</th></tr></thead>
+                    <tbody><tr><td colspan="4" style="text-align:center;">Loading logs...</td></tr></tbody>
+                </table>
             </div>
 
-            <div class="card" style="border-left: 4px solid #8b5cf6;">
-                <h3><i class="fas fa-microscope"></i> System Health</h3>
+            <div class="card" style="border-left: 4px solid var(--apple-purple);">
+                <h3 style="font-size:1rem; font-weight:600; margin-bottom:16px;">
+                    <i class="fas fa-microscope" style="margin-right:8px;"></i> System Health
+                </h3>
                 <button onclick="window.runBenchmark()" class="btn btn-outline small" style="margin-bottom:12px;">Run Accuracy Test</button>
-                <div style="overflow-x:auto;">
-                    <table class="data-table" id="benchmarkTable">
-                        <thead><tr><th>Route</th><th>Mode</th><th>Avg</th><th>Var</th><th>Acc</th></tr></thead>
-                        <tbody><tr><td colspan="5" class="text-muted" style="text-align:center;">Analyze data to see scores</td></tr></tbody>
-                    </table>
-                </div>
+                <table class="data-table" id="benchmarkTable">
+                    <thead><tr><th>Route</th><th>Mode</th><th>Avg</th><th>Var</th><th>Acc</th></tr></thead>
+                    <tbody><tr><td colspan="5" class="text-muted" style="text-align:center;">Analyze data to see scores</td></tr></tbody>
+                </table>
             </div>
         </section>
+
+        <!-- Login Button (Header) -->
+        <button id="loginBtn" class="btn small btn-outline" onclick="window.showLoginModal()" style="position:fixed; top:16px; right:16px; width:auto; z-index:100;">
+            <i class="fas fa-user"></i> <span id="loginBtnText">Login</span>
+        </button>
     </div>
 
+    <!-- iOS 26 Navigation -->
     <nav class="nav-bar">
         <button class="nav-item active" onclick="window.switchTab('view-log', this)">
             <i class="fas fa-stopwatch nav-icon"></i> <span>Logger</span>

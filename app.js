@@ -14,7 +14,9 @@ const MODE_MAP = {
     'Jeep':    { icon: 'fa-shuttle-van',   class: 'mode-jeep' },
     'Ejeep':   { icon: 'fa-bolt',          class: 'mode-ejeep' },
     'Walking': { icon: 'fa-walking',       class: 'mode-walk' },
-    'Default': { icon: 'fa-route',         class: 'mode-bus' }
+    'Default': { icon: 'fa-route',         class: 'mode-bus' },
+    'Tricycle':{ icon: 'fa-car-side',      class: 'mode-jeep' },
+    'Custom':  { icon: 'fa-route',         class: 'mode-train' }
 };
 
 // --- GLOBAL STATE ---
@@ -130,20 +132,20 @@ function showFeedbackModal(success, successMsg, failMsg) {
     
     if (success) {
         title.innerText = 'Success';
-        title.style.color = 'var(--accent)';
+        title.style.color = 'var(--apple-green)';
         message.innerText = successMsg;
-        icon.innerHTML = '<i class="fas fa-check-circle" style="font-size:3rem; color:var(--accent);"></i>';
+        icon.innerHTML = '<i class="fas fa-check-circle" style="font-size:3rem; color:var(--apple-green);"></i>';
         btn.innerText = 'OK';
         btn.onclick = () => modal.classList.add('hidden');
-        btn.style.background = 'var(--accent-gradient)';
+        btn.style.background = 'linear-gradient(135deg, var(--apple-green), #248a3d)';
     } else {
         title.innerText = 'Sync Issue';
-        title.style.color = 'var(--danger)';
+        title.style.color = 'var(--apple-orange)';
         message.innerText = failMsg;
-        icon.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:3rem; color:var(--danger);"></i>';
+        icon.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:3rem; color:var(--apple-orange);"></i>';
         btn.innerText = 'OK';
         btn.onclick = () => modal.classList.add('hidden');
-        btn.style.background = 'var(--primary-gradient)';
+        btn.style.background = 'linear-gradient(135deg, var(--apple-blue), var(--apple-blue-dark))';
     }
     
     modal.classList.remove('hidden');
