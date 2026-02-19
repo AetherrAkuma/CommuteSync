@@ -294,17 +294,20 @@ async function resetLogger() {
         showFeedbackModal(true, 'Logger has been reset', '');
     };
     
-    // Add cancel button
+    // Add cancel button - remove existing first to prevent duplicates
     let cancelBtn = document.getElementById('resetCancelBtn');
-    if (!cancelBtn) {
-        cancelBtn = document.createElement('button');
-        cancelBtn.id = 'resetCancelBtn';
-        cancelBtn.className = 'btn btn-outline';
-        cancelBtn.style.marginTop = '12px';
-        cancelBtn.innerText = 'Cancel';
-        btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
-    }
-    cancelBtn.onclick = () => modal.classList.add('hidden');
+    if (cancelBtn) cancelBtn.remove();
+    
+    cancelBtn = document.createElement('button');
+    cancelBtn.id = 'resetCancelBtn';
+    cancelBtn.className = 'btn btn-outline';
+    cancelBtn.style.marginTop = '12px';
+    cancelBtn.innerText = 'Cancel';
+    btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
+    cancelBtn.onclick = () => {
+        modal.classList.add('hidden');
+        document.getElementById('resetCancelBtn')?.remove();
+    };
     
     modal.classList.remove('hidden');
 }
@@ -1353,17 +1356,20 @@ window.showLoginModal = function() {
             location.reload();
         };
         
-        // Add cancel button dynamically
+        // Add cancel button - remove existing first to prevent duplicates
         let cancelBtn = document.getElementById('cancelLogoutBtn');
-        if (!cancelBtn) {
-            cancelBtn = document.createElement('button');
-            cancelBtn.id = 'cancelLogoutBtn';
-            cancelBtn.className = 'btn btn-outline';
-            cancelBtn.style.marginTop = '12px';
-            cancelBtn.innerText = 'Cancel';
-            btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
-        }
-        cancelBtn.onclick = () => modal.classList.add('hidden');
+        if (cancelBtn) cancelBtn.remove();
+        
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'cancelLogoutBtn';
+        cancelBtn.className = 'btn btn-outline';
+        cancelBtn.style.marginTop = '12px';
+        cancelBtn.innerText = 'Cancel';
+        btn.parentNode.insertBefore(cancelBtn, btn.nextSibling);
+        cancelBtn.onclick = () => {
+            modal.classList.add('hidden');
+            document.getElementById('cancelLogoutBtn')?.remove();
+        };
         
         modal.classList.remove('hidden');
     } else {
