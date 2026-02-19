@@ -1223,6 +1223,10 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoutes();
     loadPresets();
     checkLoginStatus();
+    // Load logger from server if logged in (sync from cloud)
+    if (currentUserId) {
+        loadLoggerState();
+    }
     // Start status checker
     checkSystemStatus();
     setInterval(() => {
