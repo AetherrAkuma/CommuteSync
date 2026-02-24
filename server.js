@@ -25,6 +25,13 @@ function getUserId(req) {
     return req.query.user_id || req.headers['x-user-id'] || null;
 }
 
+// Helper to convert time string to minutes
+function timeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+}
+
 // 0. AUTH - Register (optional, can be disabled via Supabase Auth)
 app.post('/api/register', async (req, res) => {
     try {
@@ -152,6 +159,8 @@ app.post('/api/predict', async (req, res) => {
         const { route_ids, start_time, date } = req.body;
         const userId = getUserId(req);
         
+        console.log("Predict request:", { route_ids, start_time, date, userId });
+        
         // Use provided date or current date
         const targetDate = date ? new Date(date) : new Date();
         const today = targetDate.getDay();
@@ -176,7 +185,7 @@ app.post('/api/predict', async (req, res) => {
             }
             const { data: logs } = await logsQuery;
             
-            // Get schedules for this route and find matching time window
+            // Get schedules for this route
             let schedulesQuery = supabase.from('route_schedules')
                 .select('*')
                 .eq('route_id', id)
@@ -186,15 +195,22 @@ app.post('/api/predict', async (req, res) => {
             }
             const { data: schedules } = await schedulesQuery;
             
-            // Find schedule that matches the start time
+            console.log(`Route ${id} schedules:`, schedules);
+            
             let interval = 0;
-            if (schedules?.length > 0 && start_time) {
-                const matchingSchedule = schedules.find(s => {
-                    const start = s.start_time || "00:00";
-                    const end = s.end_time || "23:59";
-                    return start_time >= start && start_time <= end;
-                });
-                interval = matchingSchedule?.interval_minutes || schedules[0]?.interval_minutes || 0;
+            let firstBusTime = null;
+            
+            if (schedules?.length > 0) {
+                // Get the earliest schedule for this day type
+                const sortedSchedules = schedules
+                    .filter(s => s.start_time)
+                    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+                
+                if (sortedSchedules.length > 0) {
+                    const earliest = sortedSchedules[0];
+                    firstBusTime = earliest.start_time;
+                    interval = earliest.interval_minutes || 0;
+                }
             }
             
             // Calculate wait and travel times based on mode
@@ -209,13 +225,15 @@ app.post('/api/predict', async (req, res) => {
                     wB = 0; wS = 0; wW = 0;
                     tB = ss.min(travels);
                     tS = ss.mean(travels);
-                    tW = ss.max(travels); // Worst = max travel time
+                    tW = ss.max(travels);
                 } else {
                     wB = 0; wS = 0; wW = 0;
                     tB = 10; tS = 15; tW = 20;
                 }
             } else {
                 // Vehicle mode: wait + travel
+                
+                // Calculate wait times from historical data
                 if (logs?.length > 0) {
                     const waits = logs.map(l => (new Date(`2000-01-01T${l.timestamp_boarded}`) - new Date(`2000-01-01T${l.timestamp_arrived_pickup}`))/60000);
                     const travels = logs.map(l => (new Date(`2000-01-01T${l.timestamp_arrived_dropoff}`) - new Date(`2000-01-01T${l.timestamp_departed}`))/60000);
@@ -228,21 +246,40 @@ app.post('/api/predict', async (req, res) => {
                     tB = validTravels.length > 0 ? ss.min(validTravels) : 10;
                     
                     // SAFE: Average - avg wait + avg travel
-                    wS = validWaits.length > 0 ? ss.mean(validWaits) : (interval / 2);
+                    const avgHistoricalWait = validWaits.length > 0 ? ss.mean(validWaits) : (interval / 2);
                     tS = validTravels.length > 0 ? ss.mean(validTravels) : 15;
                     
                     // WORST: Unlucky - max wait + interval (missed bus) + max travel
-                    wW = validWaits.length > 0 ? ss.max(validWaits) : 0;
-                    // Add schedule interval if available (waiting for next bus)
-                    if (interval > 0) {
-                        wW = wW + interval;
-                    }
+                    const maxHistoricalWait = validWaits.length > 0 ? ss.max(validWaits) : 0;
                     tW = validTravels.length > 0 ? ss.max(validTravels) : 20;
+                    
+                    // If we have schedule info and user departs before first bus
+                    if (start_time && firstBusTime && start_time < firstBusTime) {
+                        // User arrives before first bus - wait for first bus
+                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                        // Use whichever is larger: historical average or wait for first bus
+                        wS = Math.max(avgHistoricalWait, waitForFirst);
+                        // Worst case: wait for first bus + interval
+                        wW = Math.max(maxHistoricalWait, waitForFirst + (interval || 10));
+                    } else if (interval > 0) {
+                        // Apply schedule interval to worst case
+                        wW = maxHistoricalWait + interval;
+                    } else {
+                        wW = maxHistoricalWait;
+                    }
                 } else {
-                    // No logs - use defaults
+                    // No logs - use defaults based on schedule
                     wB = 0;
-                    wS = interval / 2 || 5;
-                    wW = interval || 15; // Assume worst case = full interval wait
+                    
+                    if (start_time && firstBusTime && start_time < firstBusTime) {
+                        // User departs before first bus - wait for first bus
+                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                        wS = waitForFirst;
+                        wW = waitForFirst + (interval || 10);
+                    } else {
+                        wS = interval / 2 || 5;
+                        wW = interval || 15;
+                    }
                     tB = 10; tS = 15; tW = 20;
                 }
             }
@@ -251,13 +288,15 @@ app.post('/api/predict', async (req, res) => {
             clocks.safe = new Date(clocks.safe.getTime() + (wS+tS)*60000);
             clocks.worst = new Date(clocks.worst.getTime() + (wW+tW)*60000);
             
-            console.log(`Route ${id}: wait=${wS}/${wW} travel=${tS}/${tW}, interval=${interval}, logs=${logs?.length || 0}, schedules=${schedules?.length || 0}`);
+            console.log(`Route ${id}: wait=${wS}/${wW} travel=${tS}/${tW}, interval=${interval}, firstBus=${firstBusTime}, logs=${logs?.length || 0}, schedules=${schedules?.length || 0}`);
 
             legs.push({ 
                 mode: routeMode,
                 name: routeData?.name || 'Unknown',
                 origin: routeData?.origin || '',
                 destination: routeData?.destination || '',
+                first_bus: firstBusTime,
+                interval: interval,
                 arrival_time: {
                     best: clocks.best.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}),
                     safe: clocks.safe.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}),
