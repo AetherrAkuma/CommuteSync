@@ -192,15 +192,20 @@ app.post('/api/predict', async (req, res) => {
             }
             const { data: logs } = await logsQuery;
             
-            // Get schedules for this route
-            let schedulesQuery = supabase.from('route_schedules')
-                .select('*')
-                .eq('route_id', id)
-                .eq('day_type', dayType);
+            // Get schedules for this route - MUST filter by user_id to prevent data leakage
+            let schedules = [];
+            
             if (userId) {
-                schedulesQuery = schedulesQuery.eq('user_id', userId);
+                let schedulesQuery = supabase.from('route_schedules')
+                    .select('*')
+                    .eq('route_id', id)
+                    .eq('day_type', dayType)
+                    .eq('user_id', userId);
+                
+                const { data: routeSchedules } = await schedulesQuery;
+                schedules = routeSchedules || [];
             }
-            const { data: schedules } = await schedulesQuery;
+            // If no userId, schedules stays empty [] to prevent data leakage
             
             console.log(`Route ${id} schedules:`, schedules);
             
