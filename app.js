@@ -391,6 +391,39 @@ let currentUserId = localStorage.getItem('commutesync_user_id');
 let currentUsername = localStorage.getItem('commutesync_email') || localStorage.getItem('commutesync_username');
 let currentEmail = localStorage.getItem('commutesync_email');
 
+// Validate session - check if user_id is still valid
+async function validateSession() {
+    if (!currentUserId) return; // No user logged in
+    
+    try {
+        // Try to fetch user data to validate session
+        const res = await fetch(`${API_URL}/routes?user_id=${currentUserId}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!res.ok) {
+            // Session expired or invalid
+            console.log("Session expired, clearing credentials");
+            clearSession();
+        }
+        // If ok, session is valid
+    } catch (e) {
+        // Network error - don't clear session, let user retry
+        console.warn("Could not validate session:", e.message);
+    }
+}
+
+// Clear all session data
+function clearSession() {
+    localStorage.removeItem('commutesync_user_id');
+    localStorage.removeItem('commutesync_username');
+    localStorage.removeItem('commutesync_email');
+    currentUserId = null;
+    currentUsername = null;
+    currentEmail = null;
+}
+
 // ==========================================
 // 1. FAIL-SAFE HELPERS
 // ==========================================
@@ -1232,13 +1265,16 @@ window.saveSchedule = async function() {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadRoutes();
-    loadPresets();
-    checkLoginStatus();
-    // Load logger from server if logged in (sync from cloud)
-    if (currentUserId) {
-        loadLoggerState();
-    }
+    // Validate session before loading app
+    validateSession().then(() => {
+        loadRoutes();
+        loadPresets();
+        checkLoginStatus();
+        // Load logger from server if logged in (sync from cloud)
+        if (currentUserId) {
+            loadLoggerState();
+        }
+    });
     // Start status checker
     checkSystemStatus();
     setInterval(() => {
