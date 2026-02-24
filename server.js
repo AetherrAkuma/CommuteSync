@@ -161,8 +161,8 @@ app.post('/api/predict', async (req, res) => {
         
         console.log("Predict request:", { route_ids, start_time, date, userId });
         
-        // Use provided date or current date
-        const targetDate = date ? new Date(date) : new Date();
+        // Use provided date or current date - handle empty string
+        const targetDate = (date && date.trim()) ? new Date(date) : new Date();
         const today = targetDate.getDay();
         const dayType = (today === 0) ? 'Sunday/Holiday' : (today === 6 ? 'Saturday' : 'Weekday');
         
