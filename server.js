@@ -192,9 +192,10 @@ app.post('/api/predict', async (req, res) => {
             }
             const { data: logs } = await logsQuery;
             
-            // Get schedules for this route - MUST filter by user_id to prevent data leakage
+            // Get schedules for this route - try both with and without user_id
             let schedules = [];
             
+            // First try with user_id (for logged-in users)
             if (userId) {
                 let schedulesQuery = supabase.from('route_schedules')
                     .select('*')
@@ -203,9 +204,21 @@ app.post('/api/predict', async (req, res) => {
                     .eq('user_id', userId);
                 
                 const { data: routeSchedules } = await schedulesQuery;
+                if (routeSchedules && routeSchedules.length > 0) {
+                    schedules = routeSchedules;
+                }
+            }
+            
+            // If no schedules found with user_id, try without (for public/shared schedules)
+            if (schedules.length === 0) {
+                let schedulesQuery = supabase.from('route_schedules')
+                    .select('*')
+                    .eq('route_id', id)
+                    .eq('day_type', dayType);
+                
+                const { data: routeSchedules } = await schedulesQuery;
                 schedules = routeSchedules || [];
             }
-            // If no userId, schedules stays empty [] to prevent data leakage
             
             console.log(`Route ${id} schedules:`, schedules);
             
