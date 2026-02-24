@@ -216,9 +216,14 @@ app.post('/api/predict', async (req, res) => {
             // Calculate wait and travel times based on mode
             let wB, wS, wW, tB, tS, tW;
             
+            // Check if we have historical data
+            const hasHistoricalData = logs && logs.length > 0;
+            // Check if we have schedule data
+            const hasScheduleData = schedules && schedules.length > 0 && firstBusTime && interval > 0;
+            
             if (isWalking) {
                 // Walking mode: no waiting, just travel time
-                if (logs?.length > 0) {
+                if (hasHistoricalData) {
                     const travels = logs.map(l => {
                         return (new Date(`2000-01-01T${l.timestamp_arrived_dropoff}`) - new Date(`2000-01-01T${l.timestamp_arrived_pickup}`))/60000;
                     });
@@ -227,14 +232,14 @@ app.post('/api/predict', async (req, res) => {
                     tS = ss.mean(travels);
                     tW = ss.max(travels);
                 } else {
+                    // No data - use reasonable defaults for walking
                     wB = 0; wS = 0; wW = 0;
                     tB = 10; tS = 15; tW = 20;
                 }
             } else {
                 // Vehicle mode: wait + travel
                 
-                // Calculate wait times from historical data
-                if (logs?.length > 0) {
+                if (hasHistoricalData) {
                     const waits = logs.map(l => (new Date(`2000-01-01T${l.timestamp_boarded}`) - new Date(`2000-01-01T${l.timestamp_arrived_pickup}`))/60000);
                     const travels = logs.map(l => (new Date(`2000-01-01T${l.timestamp_arrived_dropoff}`) - new Date(`2000-01-01T${l.timestamp_departed}`))/60000);
                     
@@ -246,39 +251,43 @@ app.post('/api/predict', async (req, res) => {
                     tB = validTravels.length > 0 ? ss.min(validTravels) : 10;
                     
                     // SAFE: Average - avg wait + avg travel
-                    const avgHistoricalWait = validWaits.length > 0 ? ss.mean(validWaits) : (interval / 2);
+                    const avgHistoricalWait = validWaits.length > 0 ? ss.mean(validWaits) : 5;
                     tS = validTravels.length > 0 ? ss.mean(validTravels) : 15;
                     
                     // WORST: Unlucky - max wait + interval (missed bus) + max travel
-                    const maxHistoricalWait = validWaits.length > 0 ? ss.max(validWaits) : 0;
+                    const maxHistoricalWait = validWaits.length > 0 ? ss.max(validWaits) : 10;
                     tW = validTravels.length > 0 ? ss.max(validTravels) : 20;
                     
-                    // If we have schedule info and user departs before first bus
-                    if (start_time && firstBusTime && start_time < firstBusTime) {
+                    // Apply schedule adjustments ONLY if we have schedule data
+                    if (hasScheduleData && start_time && start_time < firstBusTime) {
                         // User arrives before first bus - wait for first bus
                         const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
-                        // Use whichever is larger: historical average or wait for first bus
                         wS = Math.max(avgHistoricalWait, waitForFirst);
-                        // Worst case: wait for first bus + interval
-                        wW = Math.max(maxHistoricalWait, waitForFirst + (interval || 10));
-                    } else if (interval > 0) {
+                        wW = Math.max(maxHistoricalWait, waitForFirst + interval);
+                    } else if (hasScheduleData && interval > 0) {
                         // Apply schedule interval to worst case
                         wW = maxHistoricalWait + interval;
                     } else {
+                        // No schedule - use historical data only
                         wW = maxHistoricalWait;
                     }
                 } else {
-                    // No logs - use defaults based on schedule
+                    // No historical logs - use defaults
                     wB = 0;
                     
-                    if (start_time && firstBusTime && start_time < firstBusTime) {
-                        // User departs before first bus - wait for first bus
+                    if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
+                        // Has schedule and user departs before first bus
                         const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
                         wS = waitForFirst;
-                        wW = waitForFirst + (interval || 10);
+                        wW = waitForFirst + interval;
+                    } else if (hasScheduleData && interval > 0) {
+                        // Has schedule - use interval-based defaults
+                        wS = interval / 2;
+                        wW = interval;
                     } else {
-                        wS = interval / 2 || 5;
-                        wW = interval || 15;
+                        // No schedule at all - use generic defaults
+                        wS = 5;
+                        wW = 15;
                     }
                     tB = 10; tS = 15; tW = 20;
                 }
