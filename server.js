@@ -309,21 +309,35 @@ app.post('/api/predict', async (req, res) => {
                         const avgHistoricalWait = ss.mean(validWaits);
                         const maxHistoricalWait = ss.max(validWaits);
                         
-                        // Apply schedule adjustments ONLY if we have schedule data AND user arrives at this route before first bus
-                        // Use routeStartTime (previous route's arrival) NOT original start_time
-                        if (hasScheduleData && routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
-                            const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
-                            wS = Math.max(avgHistoricalWait, waitForFirst);
-                            wW = Math.max(maxHistoricalWait, waitForFirst + interval);
+                        // Apply schedule adjustments if we have schedule data
+                        if (hasScheduleData) {
+                            if (routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
+                                // User arrives before first bus - wait for first bus
+                                const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
+                                wS = Math.max(avgHistoricalWait, waitForFirst);
+                                wW = Math.max(maxHistoricalWait, waitForFirst + interval);
+                            } else {
+                                // User arrives after first bus - use historical wait + interval for worst case
+                                wS = avgHistoricalWait;
+                                wW = maxHistoricalWait + interval;
+                            }
                         } else {
+                            // No schedule - use historical data only
                             wS = avgHistoricalWait;
                             wW = maxHistoricalWait;
                         }
-                    } else if (hasScheduleData && routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
-                        // No wait history but has schedule and user arrives at this route before first bus
-                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
-                        wS = waitForFirst;
-                        wW = waitForFirst + interval;
+                    } else if (hasScheduleData) {
+                        // No wait history but has schedule
+                        if (routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
+                            // User arrives before first bus
+                            const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
+                            wS = waitForFirst;
+                            wW = waitForFirst + interval;
+                        } else {
+                            // User arrives after first bus - use interval only
+                            wS = interval / 2;
+                            wW = interval;
+                        }
                     } else {
                         // No wait data at all
                         return res.json({ 
