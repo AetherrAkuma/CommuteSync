@@ -228,6 +228,28 @@ app.post('/api/predict', async (req, res) => {
             // Check if we have schedule data
             const hasScheduleData = schedules && schedules.length > 0 && firstBusTime && interval > 0;
             
+            // Get schedule end time
+            let scheduleEndTime = null;
+            if (schedules?.length > 0) {
+                const sortedByEnd = schedules
+                    .filter(s => s.end_time)
+                    .sort((a, b) => b.end_time.localeCompare(a.end_time));
+                if (sortedByEnd.length > 0) {
+                    scheduleEndTime = sortedByEnd[0].end_time;
+                }
+            }
+            
+            // Check if start_time is beyond schedule end time
+            const isBeyondSchedule = hasScheduleData && scheduleEndTime && start_time && start_time > scheduleEndTime;
+            
+            if (isBeyondSchedule) {
+                // Return "Not Available" indicator
+                return res.json({ 
+                    error: "Not Available", 
+                    message: `Route ${routeData?.name || id} is not available after ${scheduleEndTime}` 
+                });
+            }
+            
             if (isWalking) {
                 // Walking mode: no waiting, just travel time
                 if (hasHistoricalData) {
@@ -257,7 +279,7 @@ app.post('/api/predict', async (req, res) => {
                     wB = 0;
                     tB = validTravels.length > 0 ? ss.min(validTravels) : 10;
                     
-                    // SAFE: Average - avg wait + avg travel
+                    // SAFE: Average - avg wait + avg travel - ALWAYS use historical if available
                     const avgHistoricalWait = validWaits.length > 0 ? ss.mean(validWaits) : 5;
                     tS = validTravels.length > 0 ? ss.mean(validTravels) : 15;
                     
@@ -265,21 +287,19 @@ app.post('/api/predict', async (req, res) => {
                     const maxHistoricalWait = validWaits.length > 0 ? ss.max(validWaits) : 10;
                     tW = validTravels.length > 0 ? ss.max(validTravels) : 20;
                     
-                    // Apply schedule adjustments ONLY if we have schedule data
-                    if (hasScheduleData && start_time && start_time < firstBusTime) {
+                    // Apply schedule adjustments ONLY if we have schedule data AND user departs before first bus
+                    if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
                         // User arrives before first bus - wait for first bus
                         const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
                         wS = Math.max(avgHistoricalWait, waitForFirst);
                         wW = Math.max(maxHistoricalWait, waitForFirst + interval);
-                    } else if (hasScheduleData && interval > 0) {
-                        // Apply schedule interval to worst case
-                        wW = maxHistoricalWait + interval;
                     } else {
-                        // No schedule - use historical data only
+                        // No schedule or user departs after first bus - use historical data only
+                        wS = avgHistoricalWait;
                         wW = maxHistoricalWait;
                     }
                 } else {
-                    // No historical logs - use defaults
+                    // No historical logs - use schedule or defaults
                     wB = 0;
                     
                     if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
@@ -299,6 +319,11 @@ app.post('/api/predict', async (req, res) => {
                     tB = 10; tS = 15; tW = 20;
                 }
             }
+            
+            // Ensure wait times are always numbers (not null)
+            wB = wB || 0;
+            wS = wS || 5;
+            wW = wW || 15;
 
             clocks.best = new Date(clocks.best.getTime() + (wB+tB)*60000);
             clocks.safe = new Date(clocks.safe.getTime() + (wS+tS)*60000);
