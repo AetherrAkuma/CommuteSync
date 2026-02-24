@@ -304,40 +304,25 @@ app.post('/api/predict', async (req, res) => {
                     tS = ss.mean(validTravels);
                     tW = ss.max(validTravels);
                     
-                    // SAFE/WORST wait times
-                    if (validWaits.length > 0) {
-                        const avgHistoricalWait = ss.mean(validWaits);
-                        const maxHistoricalWait = ss.max(validWaits);
-                        
-                        // Apply schedule adjustments if we have schedule data
-                        if (hasScheduleData) {
-                            if (routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
-                                // User arrives before first bus - wait for first bus
-                                const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
-                                wS = Math.max(avgHistoricalWait, waitForFirst);
-                                wW = Math.max(maxHistoricalWait, waitForFirst + interval);
-                            } else {
-                                // User arrives after first bus - use historical wait + interval for worst case
-                                wS = avgHistoricalWait;
-                                wW = maxHistoricalWait + interval;
-                            }
-                        } else {
-                            // No schedule - use historical data only
-                            wS = avgHistoricalWait;
-                            wW = maxHistoricalWait;
-                        }
-                    } else if (hasScheduleData) {
-                        // No wait history but has schedule
+                    // SAFE/WORST wait times - schedule interval ALWAYS applies if route has schedule!
+                    if (hasScheduleData) {
+                        // ALWAYS apply schedule interval!
                         if (routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
-                            // User arrives before first bus
+                            // User arrives before first bus - wait for first bus
                             const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
                             wS = waitForFirst;
                             wW = waitForFirst + interval;
                         } else {
-                            // User arrives after first bus - use interval only
-                            wS = interval / 2;
-                            wW = interval;
+                            // User arrives after first bus - use interval as expected wait
+                            wS = interval;
+                            wW = interval * 2; // Could miss one bus
                         }
+                    } else if (validWaits.length > 0) {
+                        // No schedule, use historical data
+                        const avgHistoricalWait = ss.mean(validWaits);
+                        const maxHistoricalWait = ss.max(validWaits);
+                        wS = avgHistoricalWait;
+                        wW = maxHistoricalWait;
                     } else {
                         // No wait data at all
                         return res.json({ 
