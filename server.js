@@ -161,12 +161,19 @@ app.post('/api/predict', async (req, res) => {
         
         console.log("Predict request:", { route_ids, start_time, date, userId });
         
+        // Validate start_time - if missing, return error
+        if (!start_time) {
+            return res.status(400).json({ error: "start_time is required" });
+        }
+        
         // Use provided date or current date - handle empty string
         const targetDate = (date && date.trim()) ? new Date(date) : new Date();
         const today = targetDate.getDay();
         const dayType = (today === 0) ? 'Sunday/Holiday' : (today === 6 ? 'Saturday' : 'Weekday');
         
-        let clocks = { best: new Date(`2000-01-01T${start_time}`), safe: new Date(`2000-01-01T${start_time}`), worst: new Date(`2000-01-01T${start_time}`) };
+        // Create clocks with valid time - default to 08:00 if start_time is invalid
+        const validStartTime = (start_time && start_time.includes(':')) ? start_time : '08:00';
+        let clocks = { best: new Date(`2000-01-01T${validStartTime}`), safe: new Date(`2000-01-01T${validStartTime}`), worst: new Date(`2000-01-01T${validStartTime}`) };
         let legs = [];
 
         for (const id of route_ids) {
