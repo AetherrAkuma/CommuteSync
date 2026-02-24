@@ -228,6 +228,10 @@ app.post('/api/predict', async (req, res) => {
             // Calculate wait and travel times based on mode
             let wB, wS, wW, tB, tS, tW;
             
+            // CRITICAL: Use the previous route's arrival time as this route's start time!
+            // This is the time when user actually arrives at this route's pickup point
+            const routeStartTime = clocks.safe.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
+            
             // Check if we have historical data
             const hasHistoricalData = logs && logs.length > 0;
             // Check if we have schedule data
@@ -244,8 +248,8 @@ app.post('/api/predict', async (req, res) => {
                 }
             }
             
-            // Check if start_time is beyond schedule end time
-            const isBeyondSchedule = hasScheduleData && scheduleEndTime && start_time && start_time > scheduleEndTime;
+            // Check if routeStartTime (actual arrival at this route) is beyond schedule end time
+            const isBeyondSchedule = hasScheduleData && scheduleEndTime && routeStartTime && routeStartTime > scheduleEndTime;
             
             if (isBeyondSchedule) {
                 // Return "Not Available" indicator
@@ -305,18 +309,19 @@ app.post('/api/predict', async (req, res) => {
                         const avgHistoricalWait = ss.mean(validWaits);
                         const maxHistoricalWait = ss.max(validWaits);
                         
-                        // Apply schedule adjustments ONLY if we have schedule data AND user departs before first bus
-                        if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
-                            const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                        // Apply schedule adjustments ONLY if we have schedule data AND user arrives at this route before first bus
+                        // Use routeStartTime (previous route's arrival) NOT original start_time
+                        if (hasScheduleData && routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
+                            const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
                             wS = Math.max(avgHistoricalWait, waitForFirst);
                             wW = Math.max(maxHistoricalWait, waitForFirst + interval);
                         } else {
                             wS = avgHistoricalWait;
                             wW = maxHistoricalWait;
                         }
-                    } else if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
-                        // No wait history but has schedule and user before first bus
-                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                    } else if (hasScheduleData && routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
+                        // No wait history but has schedule and user arrives at this route before first bus
+                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
                         wS = waitForFirst;
                         wW = waitForFirst + interval;
                     } else {
@@ -327,9 +332,9 @@ app.post('/api/predict', async (req, res) => {
                         });
                     }
                 } else if (hasScheduleData) {
-                    // Has schedule but no historical data
-                    if (start_time && firstBusTime && start_time < firstBusTime) {
-                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                    // Has schedule but no historical data - use routeStartTime (when user arrives at this route)
+                    if (routeStartTime && firstBusTime && routeStartTime < firstBusTime) {
+                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(routeStartTime);
                         wB = 0;
                         wS = waitForFirst;
                         wW = waitForFirst + interval;
