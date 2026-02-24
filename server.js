@@ -250,6 +250,15 @@ app.post('/api/predict', async (req, res) => {
                 });
             }
             
+            // Check if we have any data (historical or schedule)
+            if (!hasHistoricalData && !hasScheduleData) {
+                // NO DATA AT ALL - cannot make prediction
+                return res.json({ 
+                    error: "No Data", 
+                    message: `No historical data or schedule for ${routeData?.name || id}. Please log some trips first.` 
+                });
+            }
+            
             if (isWalking) {
                 // Walking mode: no waiting, just travel time
                 if (hasHistoricalData) {
@@ -260,11 +269,8 @@ app.post('/api/predict', async (req, res) => {
                     tB = ss.min(travels);
                     tS = ss.mean(travels);
                     tW = ss.max(travels);
-                } else {
-                    // No data - use reasonable defaults for walking
-                    wB = 0; wS = 0; wW = 0;
-                    tB = 10; tS = 15; tW = 20;
                 }
+                // Walking without data not handled - will be caught above
             } else {
                 // Vehicle mode: wait + travel
                 
@@ -275,55 +281,63 @@ app.post('/api/predict', async (req, res) => {
                     const validWaits = waits.filter(w => w > 0);
                     const validTravels = travels.filter(t => t > 0);
                     
+                    if (validTravels.length === 0) {
+                        // No valid travel data
+                        return res.json({ 
+                            error: "No Data", 
+                            message: `No valid travel data for ${routeData?.name || id}` 
+                        });
+                    }
+                    
                     // BEST: Lucky - 0 wait + min travel
                     wB = 0;
-                    tB = validTravels.length > 0 ? ss.min(validTravels) : 10;
+                    tB = ss.min(validTravels);
+                    tS = ss.mean(validTravels);
+                    tW = ss.max(validTravels);
                     
-                    // SAFE: Average - avg wait + avg travel - ALWAYS use historical if available
-                    const avgHistoricalWait = validWaits.length > 0 ? ss.mean(validWaits) : 5;
-                    tS = validTravels.length > 0 ? ss.mean(validTravels) : 15;
-                    
-                    // WORST: Unlucky - max wait + interval (missed bus) + max travel
-                    const maxHistoricalWait = validWaits.length > 0 ? ss.max(validWaits) : 10;
-                    tW = validTravels.length > 0 ? ss.max(validTravels) : 20;
-                    
-                    // Apply schedule adjustments ONLY if we have schedule data AND user departs before first bus
-                    if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
-                        // User arrives before first bus - wait for first bus
-                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
-                        wS = Math.max(avgHistoricalWait, waitForFirst);
-                        wW = Math.max(maxHistoricalWait, waitForFirst + interval);
-                    } else {
-                        // No schedule or user departs after first bus - use historical data only
-                        wS = avgHistoricalWait;
-                        wW = maxHistoricalWait;
-                    }
-                } else {
-                    // No historical logs - use schedule or defaults
-                    wB = 0;
-                    
-                    if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
-                        // Has schedule and user departs before first bus
+                    // SAFE/WORST wait times
+                    if (validWaits.length > 0) {
+                        const avgHistoricalWait = ss.mean(validWaits);
+                        const maxHistoricalWait = ss.max(validWaits);
+                        
+                        // Apply schedule adjustments ONLY if we have schedule data AND user departs before first bus
+                        if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
+                            const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                            wS = Math.max(avgHistoricalWait, waitForFirst);
+                            wW = Math.max(maxHistoricalWait, waitForFirst + interval);
+                        } else {
+                            wS = avgHistoricalWait;
+                            wW = maxHistoricalWait;
+                        }
+                    } else if (hasScheduleData && start_time && firstBusTime && start_time < firstBusTime) {
+                        // No wait history but has schedule and user before first bus
                         const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
                         wS = waitForFirst;
                         wW = waitForFirst + interval;
-                    } else if (hasScheduleData && interval > 0) {
-                        // Has schedule - use interval-based defaults
-                        wS = interval / 2;
-                        wW = interval;
                     } else {
-                        // No schedule at all - use generic defaults
-                        wS = 5;
-                        wW = 15;
+                        // No wait data at all
+                        return res.json({ 
+                            error: "No Data", 
+                            message: `No waiting time data for ${routeData?.name || id}` 
+                        });
                     }
-                    tB = 10; tS = 15; tW = 20;
+                } else if (hasScheduleData) {
+                    // Has schedule but no historical data
+                    if (start_time && firstBusTime && start_time < firstBusTime) {
+                        const waitForFirst = timeToMinutes(firstBusTime) - timeToMinutes(start_time);
+                        wB = 0;
+                        wS = waitForFirst;
+                        wW = waitForFirst + interval;
+                        tB = 0; tS = 0; tW = 0;
+                    } else {
+                        // Cannot predict without historical data
+                        return res.json({ 
+                            error: "No Data", 
+                            message: `No historical data for ${routeData?.name || id}. Please log trips first.` 
+                        });
+                    }
                 }
             }
-            
-            // Ensure wait times are always numbers (not null)
-            wB = wB || 0;
-            wS = wS || 5;
-            wW = wW || 15;
 
             clocks.best = new Date(clocks.best.getTime() + (wB+tB)*60000);
             clocks.safe = new Date(clocks.safe.getTime() + (wS+tS)*60000);
